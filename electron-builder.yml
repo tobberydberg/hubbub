@@ -1,0 +1,67 @@
+# Packaging configuration: https://www.electron.build/configuration
+appId: io.github.tobberydberg.hubbub
+productName: Hubbub
+copyright: Copyright © 2026 Tobias Rydberg
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - LICENSE
+  - NOTICE
+  - '!**/*.map'
+
+mac:
+  category: public.app-category.social-networking
+  icon: build/icon.png
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    # The zip is used by the auto-updater
+    - target: zip
+      arch: [arm64, x64]
+
+dmg:
+  # No version in the file names, so the README can link to releases/latest/download/…
+  artifactName: ${productName}-mac-${arch}.${ext}
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-Setup-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  executableName: hubbub
+  category: Network;InstantMessaging;Chat
+  synopsis: Mattermost-style desktop client for Nextcloud Talk
+  maintainer: Tobias Rydberg <tobias.rydberg@cleura.com>
+  artifactName: ${productName}-linux-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64]
+
+publish:
+  provider: github
+  owner: tobberydberg
+  repo: hubbub
+  releaseType: draft

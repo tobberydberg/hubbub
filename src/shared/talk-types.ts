@@ -1,0 +1,204 @@
+// Subset of the Nextcloud Talk (spreed) API types that Hubbub uses.
+// Reference: https://nextcloud-talk.readthedocs.io/ and the spreed openapi.json
+
+export const RoomType = {
+  OneToOne: 1,
+  Group: 2,
+  Public: 3,
+  Changelog: 4,
+  OneToOneFormer: 5,
+  NoteToSelf: 6
+} as const
+
+export const NotificationLevel = {
+  Default: 0,
+  Always: 1,
+  Mention: 2,
+  Never: 3
+} as const
+
+export const ParticipantType = {
+  Owner: 1,
+  Moderator: 2,
+  User: 3,
+  Guest: 4,
+  UserSelfJoined: 5,
+  GuestModerator: 6
+} as const
+
+export interface RichObjectParameter {
+  type: string
+  id: string
+  name: string
+  link?: string
+  path?: string
+  mimetype?: string
+  size?: number | string
+  'preview-available'?: 'yes' | 'no'
+  width?: number | string
+  height?: number | string
+  server?: string
+  mention?: string
+  [key: string]: unknown
+}
+
+export interface ChatMessage {
+  id: number
+  token: string
+  actorType: string
+  actorId: string
+  actorDisplayName: string
+  timestamp: number
+  message: string
+  messageParameters: Record<string, RichObjectParameter> | []
+  messageType:
+    | 'comment'
+    | 'comment_deleted'
+    | 'system'
+    | 'command'
+    | 'voice-message'
+    | 'record-audio'
+    | 'record-video'
+    | string
+  systemMessage: string
+  isReplyable?: boolean
+  referenceId?: string
+  markdown?: boolean
+  reactions?: Record<string, number> | []
+  reactionsSelf?: string[]
+  expirationTimestamp?: number
+  lastEditActorDisplayName?: string
+  lastEditTimestamp?: number
+  silent?: boolean
+  deleted?: boolean
+  threadId?: number
+  isThread?: boolean
+  threadTitle?: string
+  threadReplies?: number
+  parent?: ChatMessage | { id: number; deleted: true }
+}
+
+export interface Room {
+  id: number
+  token: string
+  type: number
+  name: string
+  displayName: string
+  description: string
+  isFavorite: boolean
+  isArchived?: boolean
+  readOnly: number
+  unreadMessages: number
+  unreadMention: boolean
+  unreadMentionDirect: boolean
+  lastActivity: number
+  lastReadMessage: number
+  lastMessage?: ChatMessage | []
+  notificationLevel: number
+  participantType: number
+  permissions: number
+  avatarVersion?: string
+  isCustomAvatar?: boolean
+  canLeaveConversation?: boolean
+  canDeleteConversation?: boolean
+  hasCall?: boolean
+  status?: string
+  statusIcon?: string | null
+  statusMessage?: string | null
+  tagIds?: string[]
+  muteUntil?: number
+  remoteServer?: string
+  /** What the conversation belongs to, e.g. 'event' for Calendar meetings (see Talk's object types) */
+  objectType?: string
+  /** For 'event': "start#end" in unix seconds */
+  objectId?: string
+}
+
+export interface ConversationTag {
+  id: string
+  name: string
+  sortOrder: number
+  collapsed: boolean
+  type: 'custom' | 'favorites' | 'other'
+}
+
+export interface ThreadInfo {
+  thread: {
+    id: number
+    roomToken: string
+    title: string
+    lastMessageId: number
+    lastActivity: number
+    numReplies: number
+  }
+  attendee: { notificationLevel: number }
+  first: ChatMessage | null
+  last: ChatMessage | null
+}
+
+export interface Participant {
+  attendeeId: number
+  actorType: string
+  actorId: string
+  displayName: string
+  participantType: number
+  inCall: number
+  status?: string
+  statusIcon?: string | null
+  statusMessage?: string | null
+}
+
+export interface MentionSuggestion {
+  id: string
+  mentionId?: string
+  label: string
+  source: string
+  status?: string
+  details?: string
+}
+
+export interface AutocompleteResult {
+  id: string
+  label: string
+  source: string
+  subline?: string
+  status?: { status?: string } | []
+}
+
+export interface TalkCapabilities {
+  features: string[]
+  config: {
+    attachments?: { allowed?: boolean; folder?: string; 'conversation-subfolders'?: boolean }
+    chat?: { 'max-length'?: number; 'read-privacy'?: number }
+    conversations?: { 'can-create'?: boolean }
+    [key: string]: unknown
+  }
+  version?: string
+}
+
+export interface CurrentUser {
+  id: string
+  displayname: string
+  email?: string | null
+}
+
+export interface UserStatus {
+  userId: string
+  status: 'online' | 'away' | 'dnd' | 'invisible' | 'offline' | 'busy' | string
+  message?: string | null
+  icon?: string | null
+}
+
+export interface UnifiedSearchEntry {
+  title: string
+  subline: string
+  resourceUrl: string
+  thumbnailUrl?: string
+  attributes?: {
+    conversation?: string
+    messageId?: string
+    actorId?: string
+    actorType?: string
+    timestamp?: string
+  }
+}

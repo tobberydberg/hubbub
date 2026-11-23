@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Tray icon: the app icon without shadow and buzz, so it stays crisp at 16-32 px.
+       render-icon.mjs adds an unread dot for tray-unread.png. -->
+  <defs>
+    <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#2f80ff"/>
+      <stop offset="0.55" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#bg)" d="M512 24c260 0 350 0 416 66s66 156 66 422 0 356-66 422-156 66-416 66-350 0-416-66S30 778 30 512s0-356 66-422S252 24 512 24z"/>
+  <path fill="#ffffff" d="M290 210h444c96 0 156 60 156 156v250c0 96-60 156-156 156H480L310 902c-18 13-40 2-40-20V770c-80-10-136-70-136-154V366c0-96 60-156 156-156z"/>
+  <g stroke="#4f46e5" stroke-width="44" stroke-linecap="round">
+    <line x1="512" y1="500" x2="350" y2="400"/>
+    <line x1="512" y1="500" x2="674" y2="400"/>
+    <line x1="512" y1="500" x2="512" y2="660"/>
+  </g>
+  <g fill="#4f46e5">
+    <circle cx="512" cy="500" r="84"/>
+    <circle cx="350" cy="400" r="62"/>
+    <circle cx="674" cy="400" r="62"/>
+    <circle cx="512" cy="672" r="62"/>
+  </g>
+</svg>

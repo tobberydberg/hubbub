@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      electron:
+        patterns: ['electron', 'electron-*']
+      build-tooling:
+        patterns:
+          [
+            'vite',
+            '@vitejs/*',
+            'vitest',
+            'typescript',
+            'eslint*',
+            '@eslint/*',
+            'typescript-eslint',
+            'prettier'
+          ]
+      react:
+        patterns: ['react', 'react-dom', '@types/react*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
