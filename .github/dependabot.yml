@@ -4,6 +4,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Major versions of these need code or config changes (and @types/node follows Electron's Node),
+    # so they are upgraded by hand
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       electron:
         patterns: ['electron', 'electron-*']
