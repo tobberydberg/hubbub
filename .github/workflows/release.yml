@@ -30,7 +30,7 @@ jobs:
       HAS_MAC_CERT: ${{ secrets.MAC_CERTS != '' }}
       HAS_WIN_CERT: ${{ secrets.WIN_CSC_LINK != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
