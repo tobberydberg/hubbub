@@ -120,3 +120,19 @@ jobs:
           # Windows signing (base64 .pfx)
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # The draft release stays unpublished if this fails, so an update never goes out signed ad hoc
+      # by mistake
+      - name: Check that the macOS app carries Hubbub's certificate
+        if: runner.os == 'macOS' && env.HUBBUB_MAC_IDENTITY != ''
+        shell: bash
+        run: |
+          for app in dist/mac*/Hubbub.app; do
+            requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
+            echo "$app: $requirement"
+            codesign --verify --deep --strict "$app"
+            case "$requirement" in
+              *"certificate root"*) ;;
+              *) echo "::error::$app is not signed with Hubbub's certificate"; exit 1 ;;
+            esac
+          done

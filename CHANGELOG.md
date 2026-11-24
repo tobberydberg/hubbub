@@ -6,6 +6,11 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-24
+
+Call options with device checks, switching devices during calls, emoji by name, and macOS builds that keep
+their permissions across updates.
+
 ### Added
 
 - Emoji by name: type `:` and a couple of letters (`:thu`) for suggestions, pick with the arrow keys and
@@ -31,7 +36,6 @@ All notable changes to Hubbub are documented here. The format follows
 
 - Sharing your screen on macOS showed an empty list, without a word, when Screen Recording looked allowed but
   belonged to an earlier version of Hubbub. The picker now explains how to allow it again.
-
 - "Check for Updates…" in the menu now always answers, in a dialog: up to date, downloading, ready to
   restart, or what went wrong.
 - The message box no longer moves when "… is typing" appears or disappears under it.
@@ -163,7 +167,8 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tobberydberg/hubbub/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tobberydberg/hubbub/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tobberydberg/hubbub/releases/tag/v0.1.0
