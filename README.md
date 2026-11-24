@@ -50,7 +50,11 @@
   panel shows the conversation's meetings this week.
 - **Important and sensitive conversations.** Important ones notify you even on Do not disturb; sensitive
   ones hide the message text in notifications.
-- **Resizable side panel** for threads, members, info and search (double-click the edge to reset).
+- **Your status and profile cards.** Set Online, Away, Busy, Do not disturb or Invisible with a message like
+  "🏡 Working remotely" that clears itself when you choose. Click anyone's name or picture for their card: title,
+  company, contact details, status, local time and when they were last active.
+- **Link previews** under messages with a link, fetched by your Nextcloud server.
+- **Resizable sidebar and side panel** for threads, members, info and search (double-click an edge to reset).
 - **Files.** Upload with the paperclip, drag and drop, or paste. Images show inline previews.
 - **Find anything.** <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> jumps to any conversation or person on any server, with
   Unread and Meetings filters; the search bar searches messages.

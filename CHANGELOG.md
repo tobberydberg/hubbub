@@ -6,32 +6,12 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-24
+
+A calendar next to the chat, meeting invitations from Nextcloud Mail, your custom status, profile cards and link
+previews.
+
 ### Added
-
-- Invitations from Nextcloud Mail: meeting invitations that arrive in your Nextcloud Mail inbox (from
-  Microsoft Teams, Outlook, Google and others) are added to your default calendar, once, and follow the
-  organizer's updates and cancellations. The mails stay unread. Turned on per server in Settings → Calendar;
-  works while Hubbub runs, checking the last 30 days of the inbox every 5 minutes (first fetching new mail into
-  Nextcloud Mail, which otherwise may not have it yet).
-- Invitations you haven't answered are listed in the calendar's sidebar, with Yes, Maybe and No, and counted on
-  the calendar switch in the server rail. That includes invitations from colleagues on your server.
-- Teams, Zoom, Google Meet and Webex meetings get a button to join them in the event panel.
-- An event can be moved to another of your calendars, also after you've answered it: pick the calendar in the
-  event panel or the edit dialog. Nobody is told, and the answers stay as they are.
-- A repeating invitation can be answered for every occurrence or for just one.
-- Your status: the menu under your picture has **Set a custom status**, a dialog like Nextcloud's own with
-  Online, Away, Busy, Do not disturb and Invisible, a message with an emoji, suggestions (in a meeting, working
-  remotely, out sick, vacationing, traveling, …) and when it clears (after 15 minutes up to this week, or at a
-  chosen time). The menu shows your message and clears it with one click; `/status` sets it too.
-- Profile cards: click someone's name or picture (in messages, @-mentions, the member list and event invitees)
-  for their card: a bigger picture, title, company, email, phone, website and address as they share them in their
-  Nextcloud profile, their status and message, their local time when it differs from yours, and when they were
-  last active, with buttons to message or call them.
-
-- Link previews: a message with a link shows a preview of the first one, with the site, the page's title,
-  description and picture, like in Mattermost. Your Nextcloud server fetches the page (as for Talk on the web,
-  which shows the same preview), so the site never sees you. Can be turned off in Settings → Display.
-- The left sidebar can be made wider or narrower by dragging its edge; double-click for the default width.
 
 - Calendar: each server has a chat and a calendar switch under its icon in the left rail. The calendar shows
   your Nextcloud calendars (the same ones, colors and sharing as Nextcloud Calendar) by day, week (Monday to
@@ -58,6 +38,29 @@ All notable changes to Hubbub are documented here. The format follows
 - Web addresses in an event's place and description are links.
 - Week numbers (ISO, Monday-first) in the small month, the week view and the month view, turned on in the new
   Settings → Calendar, which also has the weekends in the week view and the next-meeting strip.
+- An event can be moved to another of your calendars, also after you've answered it: pick the calendar in the
+  event panel or the edit dialog. Nobody is told, and the answers stay as they are.
+- A repeating invitation can be answered for every occurrence or for just one.
+- Invitations from Nextcloud Mail: meeting invitations that arrive in your Nextcloud Mail inbox (from
+  Microsoft Teams, Outlook, Google and others) are added to your default calendar, once, and follow the
+  organizer's updates and cancellations. The mails stay unread. Turned on per server in Settings → Calendar;
+  works while Hubbub runs, checking the last 30 days of the inbox every 5 minutes (first fetching new mail into
+  Nextcloud Mail, which otherwise may not have it yet).
+- Invitations you haven't answered are listed in the calendar's sidebar, with Yes, Maybe and No, and counted on
+  the calendar switch in the server rail. That includes invitations from colleagues on your server.
+- Teams, Zoom, Google Meet and Webex meetings get a button to join them in the event panel.
+- Your status: the menu under your picture has **Set a custom status**, a dialog like Nextcloud's own with
+  Online, Away, Busy, Do not disturb and Invisible, a message with an emoji, suggestions (in a meeting, working
+  remotely, out sick, vacationing, traveling, …) and when it clears (after 15 minutes up to this week, or at a
+  chosen time). The menu shows your message and clears it with one click; `/status` sets it too.
+- Profile cards: click someone's name or picture (in messages, @-mentions, the member list and event invitees)
+  for their card: a bigger picture, title, company, email, phone, website and address as they share them in their
+  Nextcloud profile, their status and message, their local time when it differs from yours, and when they were
+  last active, with buttons to message or call them.
+- Link previews: a message with a link shows a preview of the first one, with the site, the page's title,
+  description and picture, like in Mattermost. Your Nextcloud server fetches the page (as for Talk on the web,
+  which shows the same preview), so the site never sees you. Can be turned off in Settings → Display.
+- The left sidebar can be made wider or narrower by dragging its edge; double-click for the default width.
 
 ## [0.4.0] - 2026-11-24
 
@@ -220,7 +223,8 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tobberydberg/hubbub/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tobberydberg/hubbub/compare/v0.1.0...v0.2.0

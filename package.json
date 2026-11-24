@@ -1,7 +1,7 @@
 {
   "name": "hubbub-desktop",
   "productName": "Hubbub",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A Mattermost-style desktop client for Nextcloud Talk with multi-server support",
   "main": "./out/main/index.js",
   "desktopName": "io.github.tobberydberg.hubbub.desktop",
