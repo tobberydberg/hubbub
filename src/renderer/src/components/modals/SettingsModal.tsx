@@ -3,7 +3,8 @@ import { Bell, Info, LayoutList, Monitor, Palette, Phone, SlidersHorizontal } fr
 import type { DesktopSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
 import { useApp } from '@renderer/store/app'
-import { setBackgroundBlur } from '@renderer/calls/call'
+import { setBackgroundBlur, switchCamera, switchMicrophone, switchSpeaker } from '@renderer/calls/call'
+import { deviceLabel, playTestSound, useMediaDevices } from '@renderer/calls/devices'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { Modal, Toggle } from '../common/Modal'
 
@@ -276,28 +277,22 @@ function UpdateSection({ version }: { version: string }) {
 
 function CallsTab() {
   const prefs = usePrefs()
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  useEffect(() => {
-    const load = (): void => void navigator.mediaDevices.enumerateDevices().then(setDevices)
-    load()
-    navigator.mediaDevices.addEventListener('devicechange', load)
-    return () => navigator.mediaDevices.removeEventListener('devicechange', load)
-  }, [])
-  const inputs = devices.filter((d) => d.kind === 'audioinput' && d.deviceId !== 'default')
-  const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default')
-  const cameras = devices.filter((d) => d.kind === 'videoinput')
-  // Device names are only available once the app has been allowed to use the microphone
-  const unnamed = devices.some((d) => !d.label)
+  const devices = useMediaDevices()
+  // Changes apply right away, also to a running call
   const select = (
     value: string | null,
     list: MediaDeviceInfo[],
-    onChange: (id: string | null) => void
+    onChange: (id: string | null) => unknown
   ): React.ReactNode => (
-    <select className="setting-select" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+    <select
+      className="setting-select"
+      value={value ?? ''}
+      onChange={(e) => void onChange(e.target.value || null)}
+    >
       <option value="">System default</option>
       {list.map((d, i) => (
         <option key={d.deviceId} value={d.deviceId}>
-          {d.label || `Device ${i + 1}`}
+          {deviceLabel(d, i)}
         </option>
       ))}
     </select>
@@ -310,18 +305,40 @@ function CallsTab() {
       >
         <Toggle on={prefs.ringForCalls} onChange={(v) => prefs.set({ ringForCalls: v })} />
       </Row>
-      <Row title="Microphone">
-        {select(prefs.microphoneId, inputs, (id) => prefs.set({ microphoneId: id }))}
+      <Row
+        title="Show call options before a call"
+        sub="Pick devices, check your camera and sound, and choose how the call shows, before starting or joining."
+      >
+        <Toggle on={prefs.callSetup} onChange={(v) => prefs.set({ callSetup: v })} />
       </Row>
-      <Row title="Camera">{select(prefs.cameraId, cameras, (id) => prefs.set({ cameraId: id }))}</Row>
+      <Row title="Show calls" sub="Where a call shows when it starts">
+        <select
+          className="setting-select"
+          value={prefs.callStartView}
+          onChange={(e) => prefs.set({ callStartView: e.target.value as typeof prefs.callStartView })}
+        >
+          <option value="sidebar">In the sidebar</option>
+          <option value="expanded">In the window</option>
+          <option value="popout">In its own window</option>
+        </select>
+      </Row>
+      <Row title="Microphone">{select(prefs.microphoneId, devices.microphones, switchMicrophone)}</Row>
+      <Row title="Camera">{select(prefs.cameraId, devices.cameras, switchCamera)}</Row>
       <Row
         title="Blur my background"
         sub="Others see you sharp and your surroundings blurred. Done on this computer; also in the call controls."
       >
         <Toggle on={prefs.backgroundBlur} onChange={(v) => void setBackgroundBlur(v)} />
       </Row>
-      <Row title="Speaker">{select(prefs.speakerId, outputs, (id) => prefs.set({ speakerId: id }))}</Row>
-      {unnamed && (
+      <Row title="Speaker">
+        <span className="cs-row">
+          {select(prefs.speakerId, devices.speakers, switchSpeaker)}
+          <button className="btn btn-tertiary small" onClick={() => void playTestSound(prefs.speakerId)}>
+            Test
+          </button>
+        </span>
+      </Row>
+      {devices.unnamed && (
         <p className="help" style={{ fontSize: 12 }}>
           Device names show up after your first call.
         </p>

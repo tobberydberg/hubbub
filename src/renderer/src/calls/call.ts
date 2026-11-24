@@ -9,6 +9,7 @@ import { iceServers, PeerLink } from './peer'
 import { callUnsupportedReason } from './rules'
 import { HpbSignaling, type CallUpdate, type JoinedSession, type SignalData } from './signaling'
 import type { BackgroundBlur } from './blur'
+import { openCameraTrack, openMicrophoneStream } from './devices'
 import { SpeakingDetector } from './speaking'
 
 // A call in one conversation: the conversation session on the Nextcloud server, the connection to
@@ -109,6 +110,7 @@ class CallSession {
   private screenPublisher: PeerLink | null = null
   private screen: MediaStream | null = null
   private videoSender: RTCRtpSender | null = null
+  private audioSender: RTCRtpSender | null = null
   private statusChannel: RTCDataChannel | null = null
   /** Our subscriptions by stream key: session id for cameras, screenKey() for screens */
   private readonly subscribers = new Map<string, PeerLink>()
@@ -220,12 +222,8 @@ class CallSession {
       showToast('Hubbub has no access to the microphone. Allow it in your system settings.', 'error')
       return null
     }
-    const deviceId = usePrefs.getState().microphoneId
-    const constraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: deviceId ? { ...constraints, deviceId: { ideal: deviceId } } : constraints
-      })
+      return await openMicrophoneStream(usePrefs.getState().microphoneId)
     } catch {
       showToast('No microphone available, joining without audio', 'error')
       return null
@@ -237,17 +235,8 @@ class CallSession {
       showToast('Hubbub has no access to the camera. Allow it in your system settings.', 'error')
       return null
     }
-    const deviceId = usePrefs.getState().cameraId
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-          ...(deviceId ? { deviceId: { ideal: deviceId } } : {})
-        }
-      })
-      return stream.getVideoTracks()[0] ?? null
+      return await openCameraTrack(usePrefs.getState().cameraId)
     } catch {
       showToast('The camera could not be started', 'error')
       return null
@@ -297,7 +286,7 @@ class CallSession {
     const outgoing = new MediaStream()
     for (const track of this.microphone?.getAudioTracks() ?? []) {
       outgoing.addTrack(track)
-      link.pc.addTrack(track, outgoing)
+      this.audioSender = link.pc.addTrack(track, outgoing)
     }
     if (this.canPublishVideo) {
       const simulcast = this.signaling.features.includes('simulcast')
@@ -315,19 +304,24 @@ class CallSession {
       if (link.pc.connectionState === 'failed' && this.publisher === link) void this.republish()
     }
     this.publisher = link
-    if (this.microphone) {
-      this.watchSpeaking(SELF, this.microphone, (speaking) => {
-        updateCall((c) => void (c.speaking = speaking))
-        if (!this.state.muted) this.sendStatus(speaking ? 'speaking' : 'stoppedSpeaking')
-      })
-    }
+    this.watchSelf()
     await link.offer(this.nick())
+  }
+
+  /** Whether we are speaking, for our own tile and for the others */
+  private watchSelf(): void {
+    if (!this.microphone) return
+    this.watchSpeaking(SELF, this.microphone, (speaking) => {
+      updateCall((c) => void (c.speaking = speaking))
+      if (!this.state.muted) this.sendStatus(speaking ? 'speaking' : 'stoppedSpeaking')
+    })
   }
 
   private async republish(): Promise<void> {
     this.publisher?.close()
     this.publisher = null
     this.videoSender = null
+    this.audioSender = null
     await this.publish().catch(() => undefined)
   }
 
@@ -751,6 +745,63 @@ class CallSession {
     this.sendStatus(on ? 'videoOn' : 'videoOff')
   }
 
+  /** Switches to another microphone during the call (the preference is already set). */
+  async switchMicrophone(): Promise<void> {
+    const room = this.account.rooms[this.token]
+    if (this.ended || (room?.permissions && !(room.permissions & PUBLISH_AUDIO))) return
+    let stream: MediaStream
+    try {
+      stream = await openMicrophoneStream(usePrefs.getState().microphoneId)
+    } catch {
+      showToast('That microphone could not be started', 'error')
+      return
+    }
+    if (this.ended) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    const track = stream.getAudioTracks()[0]
+    const muted = !!useCall.getState().active?.muted
+    track.enabled = !muted
+    const previous = this.microphone
+    this.microphone = stream
+    // Without a microphone so far there is nothing to replace: publish again, with audio
+    if (this.audioSender) await this.audioSender.replaceTrack(track)
+    else await this.republish()
+    previous?.getTracks().forEach((t) => t.stop())
+    this.watchSelf()
+    updateCall((c) => void (c.listenOnly = false))
+    if (!previous)
+      for (const id of this.remotes) this.sendTo(id, muted ? 'mute' : 'unmute', { name: 'audio' })
+  }
+
+  /** Switches to another camera during the call; with the camera off, it is used next time. */
+  async switchCamera(): Promise<void> {
+    if (!this.camera || this.ended) return
+    const track = await this.openCamera()
+    if (!track || this.ended || !this.camera) {
+      track?.stop()
+      return
+    }
+    const previous = this.camera
+    const previousBlur = this.blur
+    this.camera = track
+    this.blur = null
+    if (usePrefs.getState().backgroundBlur) await this.updateBlur(false)
+    if (this.camera !== track) return
+    streams.set(SELF, new MediaStream([this.outgoingVideo!]))
+    await this.videoSender?.replaceTrack(this.outgoingVideo)
+    bumpStream(SELF)
+    previousBlur?.stop()
+    previous.stop()
+  }
+
+  /** Plays the call through another speaker (the preference is already set). */
+  switchSpeaker(): void {
+    const id = usePrefs.getState().speakerId ?? ''
+    for (const el of this.players.values()) void el.setSinkId(id).catch(() => undefined)
+  }
+
   /** What we send as our video: the camera, or the camera with its background blurred */
   private get outgoingVideo(): MediaStreamTrack | null {
     return this.blur?.track ?? this.camera
@@ -936,22 +987,33 @@ let current: CallSession | null = null
 export async function startCall(
   accountId: string,
   token: string,
-  opts: { silent?: boolean; handover?: CallHandover } = {}
+  /**
+   * handover: media and view of the call this one continues. prepared: media and view chosen in the
+   * call options before the call; another running call is left then.
+   */
+  opts: { silent?: boolean; handover?: CallHandover; prepared?: CallHandover } = {}
 ): Promise<void> {
   const account = useApp.getState().accounts[accountId]
   const room = account?.rooms[token]
-  if (!account || !room) return
   const active = useCall.getState().active
-  if (active?.accountId === accountId && active.token === token) return
+  if (!account || !room || (active?.accountId === accountId && active.token === token)) {
+    releaseMedia(opts.prepared)
+    return
+  }
 
   const reason = callUnsupportedReason(account.caps, room)
   if (reason) {
     releaseHandover(opts.handover)
+    releaseMedia(opts.prepared)
     openInBrowser(account, token, reason)
     return
   }
+  if (opts.prepared && current) await leaveCall()
   // Switching from another call keeps the microphone, camera and view, but not a screen share
-  const handover = opts.handover ?? (current ? await handOverCall(undefined, false) : undefined)
+  const handover =
+    opts.handover ?? opts.prepared ?? (current ? await handOverCall(undefined, false) : undefined)
+  // Without either, the call shows as the preferences say
+  const view = handover ? null : usePrefs.getState().callStartView
 
   const session = new CallSession(accountId, token, handover)
   current = session
@@ -966,8 +1028,8 @@ export async function startCall(
       listenOnly: false,
       videoOn: false,
       cameraAvailable: false,
-      expanded: !!handover?.expanded,
-      poppedOut: !!handover?.poppedOut,
+      expanded: handover ? handover.expanded : view === 'expanded',
+      poppedOut: handover ? handover.poppedOut : view === 'popout',
       sharing: false,
       canShareScreen: false,
       screenPicker: false,
@@ -1017,16 +1079,22 @@ export async function handOverCall(
 
 function releaseHandover(handover: CallHandover | undefined): void {
   if (!handover) return
-  handover.blur?.stop()
+  releaseMedia(handover)
+  useCall.setState({ active: null })
+  void window.hubbub.calls.setActive(false)
+}
+
+/** Stops the microphone, camera and screen capture of media that won't be used. */
+export function releaseMedia(media: CallHandover | undefined): void {
+  if (!media) return
+  media.blur?.stop()
   for (const t of [
-    ...(handover.microphone?.getTracks() ?? []),
-    ...(handover.screen?.getTracks() ?? []),
-    ...(handover.camera ? [handover.camera] : [])
+    ...(media.microphone?.getTracks() ?? []),
+    ...(media.screen?.getTracks() ?? []),
+    ...(media.camera ? [media.camera] : [])
   ]) {
     t.stop()
   }
-  useCall.setState({ active: null })
-  void window.hubbub.calls.setActive(false)
 }
 
 export function setMuted(muted: boolean): void {
@@ -1064,6 +1132,40 @@ function showReaction(from: string, name: string, emoji: string): void {
 
 export function setVideo(on: boolean): Promise<void> {
   return current?.setVideo(on) ?? Promise.resolve()
+}
+
+/**
+ * Starts or joins a call because the user asked to: with the call options first, when those are on
+ * and the call happens in Hubbub.
+ */
+export function requestCall(accountId: string, token: string): Promise<void> {
+  const account = useApp.getState().accounts[accountId]
+  const room = account?.rooms[token]
+  const active = useCall.getState().active
+  const inIt = active?.accountId === accountId && active.token === token
+  if (!usePrefs.getState().callSetup || !room || inIt || callUnsupportedReason(account.caps, room)) {
+    return startCall(accountId, token)
+  }
+  setApp({ modal: { type: 'call-setup', accountId, token } })
+  return Promise.resolve()
+}
+
+/** Uses this microphone from now on, in this call and the next ones (null: the system's). */
+export function switchMicrophone(deviceId: string | null): Promise<void> {
+  usePrefs.getState().set({ microphoneId: deviceId })
+  return current?.switchMicrophone() ?? Promise.resolve()
+}
+
+/** Uses this camera from now on, in this call and the next ones (null: the system's). */
+export function switchCamera(deviceId: string | null): Promise<void> {
+  usePrefs.getState().set({ cameraId: deviceId })
+  return current?.switchCamera() ?? Promise.resolve()
+}
+
+/** Plays calls through this speaker from now on (null: the system's). */
+export function switchSpeaker(deviceId: string | null): void {
+  usePrefs.getState().set({ speakerId: deviceId })
+  current?.switchSpeaker()
 }
 
 /** Blurs the background of our camera from now on, in this call and the next ones. */

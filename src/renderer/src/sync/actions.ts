@@ -14,7 +14,7 @@ import {
   type AccountState
 } from '@renderer/store/app'
 import { updateCall } from '@renderer/store/call'
-import { startCall, type CallHandover } from '@renderer/calls/call'
+import { requestCall, startCall, type CallHandover } from '@renderer/calls/call'
 import { GROUP_MESSAGE, groupMessageName, isGroupMessage } from '@renderer/lib/rooms'
 import { usePrefs, type LocalCategory } from '@renderer/store/prefs'
 import { applyMessages } from './chat'
@@ -575,7 +575,9 @@ export async function callPeople(
   handover?: () => Promise<CallHandover | undefined>
 ): Promise<void> {
   const token = await openConversationWith(accountId, people)
-  await startCall(accountId, token, { handover: await handover?.() })
+  // Moving a running call goes straight on; a new one asks for the call options first
+  if (handover) await startCall(accountId, token, { handover: await handover() })
+  else await requestCall(accountId, token)
 }
 
 export async function joinListedRoom(accountId: string, token: string): Promise<void> {

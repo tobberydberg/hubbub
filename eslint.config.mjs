@@ -12,6 +12,12 @@ export default tseslint.config(
     languageOptions: { globals: globals.node }
   },
   {
+    // electron-builder hooks are loaded with require()
+    files: ['scripts/**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node },
+    rules: { '@typescript-eslint/no-require-imports': 'off' }
+  },
+  {
     files: ['src/renderer/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

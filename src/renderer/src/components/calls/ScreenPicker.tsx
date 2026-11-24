@@ -65,12 +65,24 @@ export function ScreenPicker() {
           </button>
         </div>
 
-        {isMac && (access === 'denied' || (access === 'unknown' && sources?.length === 0)) && (
+        {isMac && (access !== 'granted' || sources?.length === 0) && (
           <div className="sp-permission">
-            <span>
-              macOS only lets Hubbub see your screen with the Screen Recording permission. Allow Hubbub under{' '}
-              <strong>Privacy &amp; Security → Screen Recording</strong>, then restart Hubbub.
-            </span>
+            {access === 'granted' ? (
+              // Allowed as far as macOS says, yet it shows nothing: the permission belongs to an earlier
+              // build (Hubbub isn't signed by a registered developer yet, so each update is a new app to
+              // macOS), or Hubbub wasn't restarted after it was allowed
+              <span>
+                macOS isn’t showing Hubbub your screen, although Screen Recording looks allowed. This happens
+                after an update, or when Hubbub wasn’t restarted after allowing it. Under{' '}
+                <strong>Privacy &amp; Security → Screen Recording</strong>, select Hubbub and remove it with{' '}
+                <strong>−</strong>, then restart Hubbub, share again and allow it when asked.
+              </span>
+            ) : (
+              <span>
+                macOS only lets Hubbub see your screen with the Screen Recording permission. Allow Hubbub
+                under <strong>Privacy &amp; Security → Screen Recording</strong>, then restart Hubbub.
+              </span>
+            )}
             <button
               className="btn btn-tertiary small"
               onClick={() => void window.hubbub.calls.openScreenSettings()}

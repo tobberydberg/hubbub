@@ -29,6 +29,7 @@ import { AddServerModal } from './AddServerModal'
 import { SettingsModal } from './SettingsModal'
 import { fromLocalInput, toLocalInput } from '@renderer/lib/time'
 import { MeetingModal } from './MeetingModal'
+import { CallSetupModal } from './CallSetupModal'
 import { PollModal } from './PollModal'
 
 const close = (): void => setApp({ modal: null })
@@ -65,6 +66,8 @@ export function ModalHost() {
       return <PollModal modal={modal} />
     case 'meeting':
       return <MeetingModal modal={modal} />
+    case 'call-setup':
+      return <CallSetupModal modal={modal} />
   }
 }
 

@@ -1,6 +1,6 @@
 import { AppWindow, Maximize2, Phone, PhoneOff } from 'lucide-react'
 import type { Room } from '@shared/talk-types'
-import { leaveCall, setCallExpanded, startCall } from '@renderer/calls/call'
+import { leaveCall, requestCall, setCallExpanded } from '@renderer/calls/call'
 import { callUnsupportedReason } from '@renderer/calls/rules'
 import type { AccountState } from '@renderer/store/app'
 import { useCall } from '@renderer/store/call'
@@ -37,7 +37,7 @@ export function CallButton({ account, room }: { account: AccountState; room: Roo
       <button
         className="call-btn join"
         title={unsupported ? `${unsupported}. Opens in your browser.` : 'Join the call'}
-        onClick={() => void startCall(accountId, room.token)}
+        onClick={() => void requestCall(accountId, room.token)}
       >
         <Phone size={16} />
         Join call
@@ -48,7 +48,7 @@ export function CallButton({ account, room }: { account: AccountState; room: Roo
     <button
       className="icon-btn"
       title={unsupported ? `${unsupported}. Opens in your browser.` : 'Start a call'}
-      onClick={() => void startCall(accountId, room.token)}
+      onClick={() => void requestCall(accountId, room.token)}
     >
       <Phone size={18} />
     </button>

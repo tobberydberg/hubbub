@@ -1,6 +1,6 @@
 import { RoomType } from '@shared/talk-types'
 import { talk, TalkError } from '@renderer/api/talk'
-import { startCall } from '@renderer/calls/call'
+import { requestCall } from '@renderer/calls/call'
 import { splitMentions, type SlashCommand } from '@renderer/lib/commands'
 import { hasFeature, setApp, showToast, useApp } from '@renderer/store/app'
 import { openSearch } from '@renderer/components/rhs/Rhs'
@@ -88,7 +88,7 @@ export async function runCommand(ctx: CommandContext, command: SlashCommand, arg
       case 'call': {
         const { users } = splitMentions(args)
         if (users.length) await callPeople(accountId, await people(accountId, users))
-        else await startCall(accountId, token)
+        else await requestCall(accountId, token)
         break
       }
       case 'invite': {

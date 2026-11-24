@@ -6,10 +6,11 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
-// Updates for unsigned macOS builds. macOS's own update mechanism (Squirrel.Mac) only accepts apps
-// signed with a Developer ID, so Hubbub replaces its app bundle itself: it downloads the release's
-// zip, checks it against the checksum in the release's update manifest, checks that it is a valid
-// Hubbub app, and swaps it in once Hubbub has quit.
+// Updates for macOS builds without a Developer ID. macOS's own update mechanism (Squirrel.Mac) only
+// accepts apps signed with one, so Hubbub replaces its app bundle itself: it downloads the release's
+// zip, checks it against the checksum in the release's update manifest, checks that it is a validly
+// signed Hubbub app (signed with the same certificate as the running one, when that has one), and
+// swaps it in once Hubbub has quit.
 
 const exec = promisify(execFile)
 const BUNDLE_ID = 'io.github.tobberydberg.hubbub'
@@ -23,6 +24,20 @@ export interface UpdateFile {
 /** The running Hubbub.app */
 export function currentBundle(): string {
   return resolve(process.execPath, '../../..')
+}
+
+/**
+ * The running app's designated requirement when it is signed with a certificate, e.g.
+ * `identifier "io.github.tobberydberg.hubbub" and certificate root = H"…"`; null when signed ad hoc.
+ */
+async function certificateRequirement(): Promise<string | null> {
+  try {
+    const { stdout, stderr } = await exec('codesign', ['-d', '-r-', currentBundle()])
+    const requirement = /designated => (.+)/.exec(`${stdout}\n${stderr}`)?.[1]?.trim()
+    return requirement && /\bcertificate\b/.test(requirement) ? requirement : null
+  } catch {
+    return null
+  }
 }
 
 /** Why this copy of Hubbub can't replace itself, or null if it can. */
@@ -85,6 +100,15 @@ export async function downloadMacUpdate(
     rmSync(zip)
     const appPath = join(dir, basename(currentBundle()))
     await exec('codesign', ['--verify', '--deep', '--strict', appPath])
+    // Signed with our certificate: updates must be too, so only that certificate's owner can make one
+    const requirement = await certificateRequirement()
+    if (requirement) {
+      await exec('codesign', ['--verify', '--deep', '--strict', '-R', `=${requirement}`, appPath]).catch(
+        () => {
+          throw new Error('The download is not signed by Hubbub')
+        }
+      )
+    }
     const { stdout } = await exec('/usr/libexec/PlistBuddy', [
       '-c',
       'Print :CFBundleIdentifier',

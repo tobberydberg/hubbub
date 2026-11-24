@@ -86,6 +86,7 @@ export type ModalState =
   | { type: 'pick-time'; title: string; confirmLabel: string; initial: number; onPick: (at: number) => void }
   | { type: 'poll'; accountId: string; token: string; threadId?: number; question?: string }
   | { type: 'meeting'; accountId: string; token: string }
+  | { type: 'call-setup'; accountId: string; token: string }
 
 export interface AppState {
   accounts: Record<string, AccountState>

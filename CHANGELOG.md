@@ -12,12 +12,31 @@ All notable changes to Hubbub are documented here. The format follows
   Enter or Tab. A complete shortcode like `:tada:` or `:+1:` becomes the emoji.
 - Emoticons become emoji as you type: `:-)` 🙂, `;)` 😉, `:D` 😃, `<3` ❤️ and more. Backspace right after
   brings the text back, nothing changes inside code, and it can be turned off in Settings → Advanced.
+- Call options before starting or joining a call: pick camera, microphone and speaker, with a camera
+  preview (blur included), a microphone level and a test sound; start muted or with the camera on; and
+  choose how the call shows: in the sidebar, in the window or in its own window. The choices are kept, and
+  the options can be turned off in Settings → Calls. Answering an incoming call still joins right away.
+- During a call, the arrows next to the microphone and camera buttons switch microphone, speaker or camera
+  (and blur), in the call view, its own window and the sidebar. Changing a device in Settings → Calls also
+  applies to a running call.
+
+### Changed
+
+- macOS: Hubbub is signed with its own certificate instead of ad hoc. macOS now sees every version as the same
+  app, so permissions like Screen Recording, the camera and the microphone are kept across updates (after
+  updating to this version they have to be allowed once more). Updates are only installed when they are
+  signed with the same certificate.
 
 ### Fixed
+
+- Sharing your screen on macOS showed an empty list, without a word, when Screen Recording looked allowed but
+  belonged to an earlier version of Hubbub. The picker now explains how to allow it again.
 
 - "Check for Updates…" in the menu now always answers, in a dialog: up to date, downloading, ready to
   restart, or what went wrong.
 - The message box no longer moves when "… is typing" appears or disappears under it.
+- The microphone and camera chosen in Settings → Calls are actually used; calls took the system's default
+  microphone before. If the chosen device is unplugged, the system's default is used.
 
 ## [0.3.0] - 2026-11-24
 

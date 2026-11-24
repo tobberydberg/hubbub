@@ -26,6 +26,7 @@ import { Avatar } from '../common/Avatar'
 import { focusCallPopout } from './CallPopout'
 import { useElapsed } from './useElapsed'
 import { roomTitle } from '@renderer/lib/rooms'
+import { DeviceMenu } from './DeviceMenu'
 
 // Mattermost-style call widget, docked at the bottom of the sidebar while in a call.
 
@@ -138,22 +139,28 @@ function Widget({ call }: { call: ActiveCall }) {
       </div>
 
       <div className="cw-actions">
-        <button
-          className={`cw-btn${call.muted || call.listenOnly ? ' off' : ''}`}
-          disabled={call.listenOnly}
-          title={call.listenOnly ? 'No microphone' : call.muted ? 'Unmute' : 'Mute'}
-          onClick={() => setMuted(!call.muted)}
-        >
-          {call.muted || call.listenOnly ? <MicOff size={18} /> : <Mic size={18} />}
-        </button>
-        <button
-          className={`cw-btn${call.videoOn ? '' : ' off'}`}
-          disabled={!call.cameraAvailable}
-          title={!call.cameraAvailable ? 'No camera' : call.videoOn ? 'Turn camera off' : 'Turn camera on'}
-          onClick={() => void setVideo(!call.videoOn)}
-        >
-          {call.videoOn ? <Video size={18} /> : <VideoOff size={18} />}
-        </button>
+        <span className="cw-split">
+          <button
+            className={`cw-btn${call.muted || call.listenOnly ? ' off' : ''}`}
+            disabled={call.listenOnly}
+            title={call.listenOnly ? 'No microphone' : call.muted ? 'Unmute' : 'Mute'}
+            onClick={() => setMuted(!call.muted)}
+          >
+            {call.muted || call.listenOnly ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+          <DeviceMenu kind="audio" variant="cw" />
+        </span>
+        <span className="cw-split">
+          <button
+            className={`cw-btn${call.videoOn ? '' : ' off'}`}
+            disabled={!call.cameraAvailable}
+            title={!call.cameraAvailable ? 'No camera' : call.videoOn ? 'Turn camera off' : 'Turn camera on'}
+            onClick={() => void setVideo(!call.videoOn)}
+          >
+            {call.videoOn ? <Video size={18} /> : <VideoOff size={18} />}
+          </button>
+          <DeviceMenu kind="video" variant="cw" disabled={!call.cameraAvailable} />
+        </span>
         <button
           className={`cw-btn${call.sharing ? ' active' : ''}`}
           disabled={!call.canShareScreen}

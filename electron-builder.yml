@@ -7,6 +7,9 @@ directories:
   buildResources: build
   output: dist
 
+# Signs the macOS app with Hubbub's own certificate when the release workflow asks for it
+afterPack: scripts/sign-mac.cjs
+
 files:
   - out/**
   - resources/**

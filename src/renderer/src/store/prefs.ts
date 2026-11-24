@@ -34,6 +34,13 @@ interface PrefsState {
   cameraId: string | null
   /** Blur the background of our camera in calls */
   backgroundBlur: boolean
+  /** Show the call options (devices, preview, how to show the call) before starting or joining */
+  callSetup: boolean
+  /** How a call shows when it starts: the sidebar widget, the call view, or its own window */
+  callStartView: 'sidebar' | 'expanded' | 'popout'
+  /** Last choices in the call options */
+  startWithCamera: boolean
+  startMuted: boolean
   /** ":-)" becomes 🙂 and ":tada:" 🎉 while typing */
   convertEmoticons: boolean
   /** Ring and show a notification when a call starts in a conversation */
@@ -72,6 +79,10 @@ export const usePrefs = create<PrefsState>()(
       speakerId: null,
       cameraId: null,
       backgroundBlur: false,
+      callSetup: true,
+      callStartView: 'sidebar',
+      startWithCamera: false,
+      startMuted: false,
       ringForCalls: true,
       convertEmoticons: true,
       callLayout: 'grid',

@@ -50,8 +50,9 @@
   Unread and Meetings filters; the search bar searches messages.
 - **Mark as unread** from any message (or <kbd>Alt</kbd>+click), and drafts are kept across restarts.
 - **Calls.** Start or join an audio or video call from any conversation, or call several people at once
-  from the + menu. Share your entire screen or a single window, blur your background, raise your hand, send
-  reactions and add people to a running call. A call widget in the sidebar shows who is talking; the call view
+  from the + menu, after checking your camera, microphone and speaker (and choosing how the call shows).
+  Switch devices during the call, share your entire screen or a single window, blur your background, raise
+  your hand, send reactions and add people to a running call. A call widget in the sidebar shows who is talking; the call view
   shows everyone in a grid or the speaker large, and can pop out into its own window so you can keep chatting
   in the main one. Incoming calls ring within seconds, with Join and Decline. Works together with Talk on the
   web and on phones. Needs a server with the High-Performance Backend; other calls open in the browser.
@@ -91,12 +92,14 @@ release notes are on the [Releases page](https://github.com/tobberydberg/hubbub/
 | Debian, Ubuntu (x64 / ARM)          | [amd64.deb](https://github.com/tobberydberg/hubbub/releases/latest/download/Hubbub-linux-amd64.deb) · [arm64.deb](https://github.com/tobberydberg/hubbub/releases/latest/download/Hubbub-linux-arm64.deb)     |
 | Fedora, openSUSE (x64)              | [x86_64.rpm](https://github.com/tobberydberg/hubbub/releases/latest/download/Hubbub-linux-x86_64.rpm)                                                                                                         |
 
-> **Unsigned builds:** Hubbub isn't code-signed yet, so your system asks before running it the first time.
+> **Not signed by Apple or Microsoft:** Hubbub has no paid code-signing certificate, so your system asks
+> before running it the first time.
 >
 > - **macOS:** open Hubbub once and close the warning, then go to **System Settings → Privacy & Security**,
 >   scroll down and click **Open Anyway** next to the message about Hubbub. (Or run
->   `xattr -dr com.apple.quarantine /Applications/Hubbub.app` in Terminal.) Updates aren't installed
->   automatically on macOS until the app is signed; Hubbub tells you when a new version is out.
+>   `xattr -dr com.apple.quarantine /Applications/Hubbub.app` in Terminal.) Hubbub is signed with its own
+>   certificate, so macOS keeps permissions like Screen Recording across updates, and Hubbub only installs
+>   updates signed with that same certificate.
 > - **Windows:** choose **More info → Run anyway** in the SmartScreen prompt.
 
 **Updates.** Hubbub checks GitHub for new versions on start and every few hours (or via Settings → About →

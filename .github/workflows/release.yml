@@ -53,18 +53,53 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      # Code signing is optional. Without the secrets below the installers are unsigned: macOS users
-      # allow the app once under System Settings → Privacy & Security, and Windows shows a SmartScreen
-      # prompt. Unsigned macOS builds are signed ad hoc, as Apple Silicon refuses to open an app whose
-      # bundle isn't sealed ("Hubbub is damaged"); they also can't install updates automatically.
+      # Code signing is optional. Without an Apple Developer ID (MAC_CERTS) macOS users allow the app
+      # once under System Settings → Privacy & Security, and without WIN_CSC_LINK Windows shows a
+      # SmartScreen prompt.
+      #
+      # Without a Developer ID, the macOS app is signed by scripts/sign-mac.cjs: with Hubbub's own
+      # self-signed certificate (MAC_SELF_SIGNED_P12 and MAC_SELF_SIGNED_PASSWORD), so that macOS sees
+      # every version as the same app and keeps permissions like Screen Recording across updates, or
+      # else ad hoc, as Apple Silicon refuses to open an app whose bundle isn't sealed.
       - name: Disable code signing when no certificate is configured
         if: (runner.os == 'macOS' && env.HAS_MAC_CERT != 'true') || (runner.os == 'Windows' && env.HAS_WIN_CERT != 'true')
         shell: bash
         run: |
           echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
           if [ "$RUNNER_OS" = macOS ]; then
-            echo "SIGNING_ARGS=-c.mac.identity=- -c.mac.hardenedRuntime=false" >> "$GITHUB_ENV"
+            echo "SIGNING_ARGS=-c.mac.identity=null" >> "$GITHUB_ENV"
+            echo "HUBBUB_MAC_SIGN=1" >> "$GITHUB_ENV"
           fi
+
+      - name: Load Hubbub's own macOS signing certificate
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT != 'true'
+        shell: bash
+        env:
+          P12: ${{ secrets.MAC_SELF_SIGNED_P12 }}
+          P12_PASSWORD: ${{ secrets.MAC_SELF_SIGNED_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo "::warning::No MAC_SELF_SIGNED_P12 secret: the macOS app is signed ad hoc"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/hubbub-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          # codesign only finds identities in keychains on the search list
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-certificate -c "Hubbub Code Signing" -Z "$keychain" | awk '/SHA-1/ { print $NF; exit }')"
+          if [ -z "$identity" ]; then
+            echo "::error::The signing certificate could not be loaded"
+            exit 1
+          fi
+          echo "HUBBUB_MAC_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "HUBBUB_MAC_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
 
       - name: Package and upload to the draft release
         shell: bash

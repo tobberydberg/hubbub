@@ -39,6 +39,7 @@ import { hasFeature, useApp } from '@renderer/store/app'
 import { updateCall, useCall, type ActiveCall } from '@renderer/store/call'
 import { Avatar } from '../common/Avatar'
 import { AddPeople } from './AddPeople'
+import { DeviceMenu } from './DeviceMenu'
 import { ScreenPicker } from './ScreenPicker'
 import { useElapsed } from './useElapsed'
 import { roomTitle } from '@renderer/lib/rooms'
@@ -286,22 +287,28 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
       )}
 
       <div className="cv-controls">
-        <button
-          className={`cv-btn${call.muted || call.listenOnly ? ' off' : ''}`}
-          disabled={call.listenOnly}
-          title={call.listenOnly ? 'No microphone' : call.muted ? 'Unmute' : 'Mute'}
-          onClick={() => setMuted(!call.muted)}
-        >
-          {call.muted || call.listenOnly ? <MicOff size={20} /> : <Mic size={20} />}
-        </button>
-        <button
-          className={`cv-btn${call.videoOn ? '' : ' off'}`}
-          disabled={!call.cameraAvailable}
-          title={!call.cameraAvailable ? 'No camera' : call.videoOn ? 'Turn camera off' : 'Turn camera on'}
-          onClick={() => void setVideo(!call.videoOn)}
-        >
-          {call.videoOn ? <Video size={20} /> : <VideoOff size={20} />}
-        </button>
+        <span className="cv-split">
+          <button
+            className={`cv-btn${call.muted || call.listenOnly ? ' off' : ''}`}
+            disabled={call.listenOnly}
+            title={call.listenOnly ? 'No microphone' : call.muted ? 'Unmute' : 'Mute'}
+            onClick={() => setMuted(!call.muted)}
+          >
+            {call.muted || call.listenOnly ? <MicOff size={20} /> : <Mic size={20} />}
+          </button>
+          <DeviceMenu kind="audio" variant="cv" />
+        </span>
+        <span className="cv-split">
+          <button
+            className={`cv-btn${call.videoOn ? '' : ' off'}`}
+            disabled={!call.cameraAvailable}
+            title={!call.cameraAvailable ? 'No camera' : call.videoOn ? 'Turn camera off' : 'Turn camera on'}
+            onClick={() => void setVideo(!call.videoOn)}
+          >
+            {call.videoOn ? <Video size={20} /> : <VideoOff size={20} />}
+          </button>
+          <DeviceMenu kind="video" variant="cv" disabled={!call.cameraAvailable} />
+        </span>
         {call.cameraAvailable && (
           <button
             className={`cv-btn${blur ? ' active' : ''}`}
