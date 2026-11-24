@@ -41,10 +41,24 @@ interface PrefsState {
   /** Last choices in the call options */
   startWithCamera: boolean
   startMuted: boolean
+  /** Calendar: the view, whether the week shows Saturday and Sunday, calendars hidden per account */
+  calendarView: 'day' | 'week' | 'month' | 'agenda'
+  calendarWeekends: boolean
+  /** ISO week numbers in the mini month, the week and the month view */
+  calendarWeekNumbers: boolean
+  hiddenCalendars: Record<string, string[]>
+  /** The calendar new events go into, per account (its href) */
+  defaultCalendars: Record<string, string>
+  /** A strip in the chat sidebar for the next meeting with a call, from 10 minutes before */
+  meetingStrip: boolean
   /** ":-)" becomes 🙂 and ":tada:" 🎉 while typing */
   convertEmoticons: boolean
   /** Ring and show a notification when a call starts in a conversation */
   ringForCalls: boolean
+  /** Width of the left sidebar in pixels; null is the default */
+  sidebarWidth: number | null
+  /** Previews of the first link in messages, from Nextcloud */
+  linkPreviews: boolean
   /** Width of the right-hand panel (threads, members, …) in pixels; null is the default */
   rhsWidth: number | null
   /** Call view: everyone the same size, or the speaker large */
@@ -81,6 +95,14 @@ export const usePrefs = create<PrefsState>()(
       backgroundBlur: false,
       callSetup: true,
       callStartView: 'sidebar',
+      sidebarWidth: null,
+      linkPreviews: true,
+      calendarView: 'week',
+      calendarWeekends: false,
+      calendarWeekNumbers: false,
+      hiddenCalendars: {},
+      defaultCalendars: {},
+      meetingStrip: true,
       startWithCamera: false,
       startMuted: false,
       ringForCalls: true,

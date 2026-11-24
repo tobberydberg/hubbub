@@ -40,6 +40,9 @@
   reminders in the account menu.
 - **Send later and silently.** The arrow next to Send schedules a message or sends it without notifying
   anyone. Scheduled messages can be sent now, moved or deleted.
+- **Calendar.** Your Nextcloud calendars next to the chat, by day, week, month or as an agenda, kept in sync
+  with Nextcloud Calendar. Meetings with a Talk call join right in Hubbub, and the next one shows in the chat
+  sidebar shortly before it starts.
 - **Schedule a meeting** for a conversation into your Nextcloud calendar, inviting everyone in it; the Info
   panel shows the conversation's meetings this week.
 - **Important and sensitive conversations.** Important ones notify you even on Do not disturb; sensitive

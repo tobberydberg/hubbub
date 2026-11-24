@@ -8,6 +8,9 @@ import { usePrefs } from '@renderer/store/prefs'
 import { jumpToMessage, openRoom, selectAccount } from './actions'
 import { ChatPoller, loadInitial, loadThread } from './chat'
 import { initThreadBaseline, refreshSubscribedThreads } from './threads'
+import { formatEventTime } from '@renderer/lib/calendar-time'
+import { useCalendar } from '@renderer/store/calendar'
+import { openEvent, showCalendar, upcomingEvents } from './calendar'
 
 const ACTIVE_INTERVAL = 10_000
 const BACKGROUND_INTERVAL = 30_000
@@ -64,6 +67,38 @@ class AccountSync {
     }
   }
 
+  /**
+   * Nextcloud's own calendar reminders ("Standup (in 10 minutes)"). The notification doesn't say which
+   * event, so it is matched by title among the coming events; clicking opens it in the calendar.
+   */
+  private showEventReminder(n: ServerNotification): void {
+    const title = n.subject.replace(/\s*\([^()]*\)\s*$/, '')
+    const event = upcomingEvents(this.accountId).find((e) => e.title === title)
+    const calendar = useCalendar
+      .getState()
+      .accounts[this.accountId]?.calendars?.find((c) => c.href === event?.calendarHref)
+    const body = event
+      ? [
+          formatEventTime(event),
+          calendar?.name,
+          event.talkToken ? 'Click to open the event and join' : undefined
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : (n.message ?? '').split(/\r?\n/)[0]
+    const notification = new Notification(n.subject || 'Reminder', {
+      body,
+      silent: !usePrefs.getState().notifySound,
+      tag: `event-reminder/${n.notification_id}`
+    })
+    notification.onclick = () => {
+      void window.hubbub.app.focusWindow()
+      selectAccount(this.accountId)
+      showCalendar(this.accountId, true)
+      if (event) openEvent(this.accountId, event)
+    }
+  }
+
   private async checkNotifications(): Promise<void> {
     try {
       if (useApp.getState().accounts[this.accountId]?.status === 'online') {
@@ -75,6 +110,10 @@ class AccountSync {
             last === null ? [] : res.list.filter((n) => n.app === 'spreed' && n.notification_id > last)
           const fresh = newTalk.length > 0
           for (const n of newTalk) if (n.object_type === 'reminder') this.showReminder(n)
+          if (last !== null) {
+            for (const n of res.list)
+              if (n.app === 'dav' && n.notification_id > last) this.showEventReminder(n)
+          }
           this.lastNotificationId = Math.max(last ?? 0, ...res.list.map((n) => n.notification_id))
           if (fresh) await this.poke()
         }

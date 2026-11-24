@@ -19,6 +19,9 @@ import { ServerRail } from './components/sidebar/ServerRail'
 import { isCertificateError } from './components/common/Certificate'
 import { reviewCertificate, Sidebar, signInAgain } from './components/sidebar/Sidebar'
 import logoUrl from './assets/logo.svg'
+import { CalendarSidebar } from './components/calendar/CalendarSidebar'
+import { CalendarView } from './components/calendar/CalendarView'
+import { SidebarResizer, useSidebarWidth } from './components/sidebar/SidebarResizer'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -194,23 +197,31 @@ export function App() {
   const callPoppedOut = useCall((s) => !!s.active?.poppedOut)
   const screenPicker = useCall((s) => !!s.active?.screenPicker)
   const addPeople = useCall((s) => !!s.active?.addPeople)
+  const sidebarWidth = useSidebarWidth()
+  const [dragWidth, setDragWidth] = useState<number | null>(null)
+  // The active server's calendar, when that is what it shows
+  const calendar = useApp((s) => {
+    const a = s.activeAccountId ? s.accounts[s.activeAccountId] : undefined
+    return a?.view === 'calendar' ? a : undefined
+  })
 
   return (
     <div className={`app${isMac ? ' is-mac' : ''}`}>
       <UpdateBanner />
       <GlobalHeader />
-      <div className="app-body">
+      <div className="app-body" style={{ ['--sidebar-width' as string]: `${dragWidth ?? sidebarWidth}px` }}>
         {initialized && !hasAccounts ? (
           <Welcome />
         ) : (
           <>
             <ServerRail />
-            <Sidebar />
+            {calendar ? <CalendarSidebar /> : <Sidebar />}
+            <SidebarResizer onDrag={setDragWidth} />
             {callExpanded ? (
               <CallView />
             ) : (
               <>
-                <Center />
+                {calendar ? <CalendarView account={calendar} /> : <Center />}
                 <Rhs />
               </>
             )}

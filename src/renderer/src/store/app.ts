@@ -22,7 +22,8 @@ export interface AccountState {
   roomsLoaded: boolean
   tags: ConversationTag[]
   activeToken: string | null
-  view: 'room' | 'threads'
+  /** What the server shows: a conversation, the threads list, or the calendar */
+  view: 'room' | 'threads' | 'calendar'
   userStatus?: string
   /** Native threads the user follows (Talk 22+); undefined until loaded */
   subscribedThreads?: ThreadInfo[]
@@ -63,6 +64,8 @@ export type RhsState =
   | { type: 'search'; accountId: string; query: string }
   | { type: 'reminders'; accountId: string }
   | { type: 'scheduled'; accountId: string; token: string }
+  /** A calendar event, by its id (see CalendarEvent) */
+  | { type: 'event'; accountId: string; eventId: string }
 
 export type ModalState =
   | { type: 'add-server'; serverUrl?: string }
@@ -87,6 +90,15 @@ export type ModalState =
   | { type: 'poll'; accountId: string; token: string; threadId?: number; question?: string }
   | { type: 'meeting'; accountId: string; token: string }
   | { type: 'call-setup'; accountId: string; token: string }
+  /** New calendar event (optionally at a time), or editing one by its id */
+  | {
+      type: 'event-edit'
+      accountId: string
+      eventId?: string
+      start?: number
+      end?: number
+      allDay?: boolean
+    }
 
 export interface AppState {
   accounts: Record<string, AccountState>

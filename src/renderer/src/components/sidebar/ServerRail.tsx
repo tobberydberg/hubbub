@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Calendar, MessagesSquare, Plus } from 'lucide-react'
 import { initials } from '@renderer/lib/messages'
 import { setApp, useApp } from '@renderer/store/app'
 import { reorderAccounts, selectAccount } from '@renderer/sync/actions'
+import { showCalendar } from '@renderer/sync/calendar'
 import { accountTotals } from '@renderer/sync/engine'
 
 const shortcut = window.hubbub.platform === 'darwin' ? '⌘' : 'Ctrl+'
@@ -28,30 +29,55 @@ export function ServerRail() {
         const { mentions, unread } = accountTotals(a)
         const active = id === activeId
         const title = `${a.info.label} — ${a.info.serverUrl.replace(/^https?:\/\//, '')}${i < 9 ? ` (${shortcut}${i + 1})` : ''}`
+        const calendar = a.view === 'calendar'
         return (
-          <button
-            key={id}
-            className={`server-btn${active ? ' active' : ''}${unread ? ' unread' : ''}${dragId === id ? ' dragging' : ''}`}
-            style={{ background: a.info.color }}
-            title={title}
-            onClick={() => selectAccount(id)}
-            draggable
-            onDragStart={() => setDragId(id)}
-            onDragEnd={() => setDragId(null)}
-            onDragOver={(e) => dragId && e.preventDefault()}
-            onDrop={() => onDrop(id)}
-            onContextMenu={() => setApp({ modal: { type: 'server-settings', accountId: id } })}
-          >
-            {initials(a.info.label)}
-            {unread && !mentions && <span className="server-unread-dot" />}
-            {mentions > 0 && <span className="server-badge">{mentions > 99 ? '99+' : mentions}</span>}
-            {a.status !== 'online' && (
-              <span
-                className={`server-status ${a.status === 'connecting' ? 'connecting' : a.status === 'unauthorized' ? 'unauthorized' : ''}`}
-                title={a.status === 'unauthorized' ? 'Signed out – sign in again' : a.error}
-              />
+          <div key={id} className="server-slot">
+            <button
+              className={`server-btn${active ? ' active' : ''}${unread ? ' unread' : ''}${dragId === id ? ' dragging' : ''}`}
+              style={{ background: a.info.color }}
+              title={title}
+              onClick={() => selectAccount(id)}
+              draggable
+              onDragStart={() => setDragId(id)}
+              onDragEnd={() => setDragId(null)}
+              onDragOver={(e) => dragId && e.preventDefault()}
+              onDrop={() => onDrop(id)}
+              onContextMenu={() => setApp({ modal: { type: 'server-settings', accountId: id } })}
+            >
+              {initials(a.info.label)}
+              {unread && !mentions && <span className="server-unread-dot" />}
+              {mentions > 0 && <span className="server-badge">{mentions > 99 ? '99+' : mentions}</span>}
+              {a.status !== 'online' && (
+                <span
+                  className={`server-status ${a.status === 'connecting' ? 'connecting' : a.status === 'unauthorized' ? 'unauthorized' : ''}`}
+                  title={a.status === 'unauthorized' ? 'Signed out – sign in again' : a.error}
+                />
+              )}
+            </button>
+            {active && (
+              <div className="server-modes" role="tablist" aria-label={`${a.info.label}: chat or calendar`}>
+                <button
+                  role="tab"
+                  aria-selected={!calendar}
+                  className={`server-mode${calendar ? '' : ' on'}`}
+                  title="Chat"
+                  onClick={() => showCalendar(id, false)}
+                >
+                  <MessagesSquare size={17} />
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={calendar}
+                  className={`server-mode${calendar ? ' on' : ''}`}
+                  title="Calendar"
+                  onClick={() => showCalendar(id, true)}
+                >
+                  <Calendar size={19} strokeWidth={1.75} />
+                  <span className="server-mode-date">{new Date().getDate()}</span>
+                </button>
+              </div>
             )}
-          </button>
+          </div>
         )
       })}
       <button

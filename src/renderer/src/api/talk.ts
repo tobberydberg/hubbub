@@ -109,6 +109,18 @@ export interface MeetingEvent {
   roomToken?: string
 }
 
+export interface LinkReference {
+  richObjectType: string
+  openGraphObject?: {
+    id: string
+    name?: string
+    description?: string | null
+    thumb?: string | null
+    link?: string
+  }
+  accessible?: boolean
+}
+
 export interface ServerNotification {
   notification_id: number
   app: string
@@ -393,6 +405,11 @@ export function talk(accountId: string) {
       }),
 
     // Users & search
+    /** Nextcloud's preview of a link: its page's title, description and image (Talk on the web shows the same) */
+    resolveReference: (reference: string) =>
+      get<{ references: Record<string, LinkReference | null> }>('/ocs/v2.php/references/resolve', {
+        query: { reference }
+      }),
     autocompleteUsers: (search: string, limit = 20) =>
       get<AutocompleteResult[]>('/ocs/v2.php/core/autocomplete/get', {
         query: { search, itemType: 'call', itemId: 'new', limit, shareTypes: [0] }

@@ -164,23 +164,123 @@ export async function davMkcol(creds: Credentials, userId: string, remotePath: s
 }
 
 const CALENDARS_PROPFIND = `<?xml version="1.0"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/"
+  xmlns:cs="http://calendarserver.org/ns/" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.com/ns">
   <d:prop>
     <d:displayname/>
     <d:resourcetype/>
     <d:current-user-privilege-set/>
     <c:supported-calendar-component-set/>
     <a:calendar-color/>
+    <a:calendar-order/>
+    <cs:getctag/>
+    <oc:owner-principal/>
+    <nc:owner-displayname/>
+    <oc:read-only/>
   </d:prop>
 </d:propfind>`
 
+const calendarHome = (creds: Credentials, userId: string): string =>
+  `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/calendars/${encodeURIComponent(userId)}/`
+
 /** The user's calendars as CalDAV XML (PROPFIND, depth 1); read-only. */
 export async function davCalendars(creds: Credentials, userId: string): Promise<string> {
-  const url = `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/calendars/${encodeURIComponent(userId)}/`
-  const res = await accountSession(creds.id).fetch(url, {
+  const res = await accountSession(creds.id).fetch(calendarHome(creds, userId), {
     method: 'PROPFIND',
     headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
     body: CALENDARS_PROPFIND
+  })
+  if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}
+
+/** A path inside the user's calendar home as a full URL, or an error for anything else */
+function calendarUrl(creds: Credentials, userId: string, href: string): string {
+  const home = new URL(calendarHome(creds, userId))
+  const url = new URL(href, home)
+  if (
+    url.origin !== home.origin ||
+    !url.pathname.startsWith(home.pathname) ||
+    url.pathname.includes('/../')
+  ) {
+    throw new Error('Not one of your calendars')
+  }
+  return url.toString()
+}
+
+export interface DavObject {
+  status: number
+  body: string
+  etag: string | null
+}
+
+/**
+ * Reads, writes or deletes one event (.ics) in the user's own calendars. Writes carry the ETag the
+ * event was read with (If-Match), or If-None-Match for a new one, so a change made elsewhere in the
+ * meantime is never overwritten.
+ */
+export async function davObject(
+  creds: Credentials,
+  userId: string,
+  req: { method: 'GET' | 'PUT' | 'DELETE'; href: string; body?: string; etag?: string | null }
+): Promise<DavObject> {
+  const url = calendarUrl(creds, userId, req.href)
+  if (!url.endsWith('.ics')) throw new Error('Not an event')
+  const headers: Record<string, string> = { ...authHeaders(creds) }
+  if (req.method === 'PUT') {
+    headers['Content-Type'] = 'text/calendar; charset=utf-8'
+    if (req.etag) headers['If-Match'] = req.etag
+    else headers['If-None-Match'] = '*'
+  } else if (req.method === 'DELETE' && req.etag) {
+    headers['If-Match'] = req.etag
+  }
+  const res = await accountSession(creds.id).fetch(url, { method: req.method, headers, body: req.body })
+  return {
+    status: res.status,
+    body: req.method === 'GET' ? await res.text() : '',
+    etag: res.headers.get('etag')
+  }
+}
+
+/** Someone's calendar addresses (mailto:…), as other calendar apps look them up for invitations */
+export async function davPrincipalAddresses(creds: Credentials, otherUserId: string): Promise<string[]> {
+  if (!/^[^/\\]+$/.test(otherUserId)) throw new Error('Invalid user')
+  const url = `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/principals/users/${encodeURIComponent(otherUserId)}/`
+  const res = await accountSession(creds.id).fetch(url, {
+    method: 'PROPFIND',
+    headers: { ...authHeaders(creds), Depth: '0', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-user-address-set/></d:prop></d:propfind>`
+  })
+  if (!res.ok && res.status !== 207) return []
+  const xml = await res.text()
+  return [...xml.matchAll(/<(?:[\w-]+:)?href>(mailto:[^<]+)<\/(?:[\w-]+:)?href>/gi)].map((m) => m[1])
+}
+
+const UTC_STAMP = /^\d{8}T\d{6}Z$/
+
+/**
+ * The events of one of the user's calendars between two times (CalDAV REPORT), with repeating
+ * events expanded by the server into their occurrences; read-only. `href` is the calendar's path as
+ * the calendar list gives it, and has to be inside the user's own calendar home.
+ */
+export async function davEvents(
+  creds: Credentials,
+  userId: string,
+  href: string,
+  start: string,
+  end: string
+): Promise<string> {
+  const url = calendarUrl(creds, userId, href)
+  if (!UTC_STAMP.test(start) || !UTC_STAMP.test(end)) throw new Error('Invalid time range')
+  const range = `start="${start}" end="${end}"`
+  const res = await accountSession(creds.id).fetch(url, {
+    method: 'REPORT',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: `<?xml version="1.0"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:getetag/><c:calendar-data><c:expand ${range}/></c:calendar-data></d:prop>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range ${range}/></c:comp-filter></c:comp-filter></c:filter>
+</c:calendar-query>`
   })
   if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
   return res.text()

@@ -64,6 +64,7 @@ import { getSync, roomMentionCount } from '@renderer/sync/engine'
 import { useThreads } from '@renderer/sync/threads'
 import { useCall } from '@renderer/store/call'
 import { CallWidget } from '../calls/CallWidget'
+import { MeetingStrip } from '../calendar/CalendarSidebar'
 import { Avatar } from '../common/Avatar'
 import { isCertificateError } from '../common/Certificate'
 import {
@@ -150,6 +151,7 @@ export function Sidebar() {
         )}
       </div>
 
+      <MeetingStrip accountId={accountId} />
       <CallWidget />
 
       {headerMenu.state && (

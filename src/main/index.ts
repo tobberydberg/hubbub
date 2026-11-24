@@ -46,7 +46,16 @@ import {
   setTrayUnread,
   showWindow
 } from './desktop'
-import { abortRequest, davCalendars, davMkcol, davUpload, ocsRequest } from './http'
+import {
+  abortRequest,
+  davCalendars,
+  davEvents,
+  davMkcol,
+  davObject,
+  davPrincipalAddresses,
+  davUpload,
+  ocsRequest
+} from './http'
 import { handleMediaProtocol, registerMediaScheme } from './media'
 import { buildMenu } from './menu'
 import { readJson, writeJson } from './storage'
@@ -227,6 +236,19 @@ function registerIpc(): void {
     const account = getAccount(accountId)
     if (!account) throw new Error('Unknown account')
     return davCalendars(getCredentials(accountId), account.userId)
+  })
+  handle('dav:object', (accountId: string, req: Parameters<typeof davObject>[2]) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davObject(getCredentials(accountId), account.userId, req)
+  })
+  handle('dav:addresses', (accountId: string, userId: string) =>
+    davPrincipalAddresses(getCredentials(accountId), userId)
+  )
+  handle('dav:events', (accountId: string, href: string, start: string, end: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davEvents(getCredentials(accountId), account.userId, href, start, end)
   })
   handle('dav:upload', async (req: UploadRequest): Promise<UploadResult> => {
     const account = getAccount(req.accountId)

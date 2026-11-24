@@ -144,6 +144,15 @@ export interface HubbubApi {
   upload(req: UploadRequest): Promise<UploadResult>
   /** The user's calendars, as the raw CalDAV response */
   calendars(accountId: string): Promise<string>
+  /** Events of one calendar between two UTC times (yyyymmddThhmmssZ), repeats expanded; raw CalDAV */
+  calendarEvents(accountId: string, href: string, start: string, end: string): Promise<string>
+  /** Reads, writes or deletes one event in the user's calendars (ETag-checked); see main/http.ts */
+  calendarObject(
+    accountId: string,
+    req: { method: 'GET' | 'PUT' | 'DELETE'; href: string; body?: string; etag?: string | null }
+  ): Promise<{ status: number; body: string; etag: string | null }>
+  /** Another user's calendar addresses (mailto:…), for invitations */
+  calendarAddresses(accountId: string, userId: string): Promise<string[]>
   app: {
     version(): Promise<string>
     openExternal(url: string): Promise<void>
@@ -188,5 +197,8 @@ export const media = {
   roomAvatar: (accountId: string, token: string, version = '', dark = false): string =>
     `hubbub-media://${accountId}/avatar/room/${token}?v=${encodeURIComponent(version)}${dark ? '&dark=1' : ''}`,
   preview: (accountId: string, fileId: string, size = 600): string =>
-    `hubbub-media://${accountId}/preview/${encodeURIComponent(fileId)}?size=${size}`
+    `hubbub-media://${accountId}/preview/${encodeURIComponent(fileId)}?size=${size}`,
+  /** A link preview's image, which Nextcloud serves for the page it previewed */
+  referencePreview: (accountId: string, id: string): string =>
+    `hubbub-media://${accountId}/reference/${encodeURIComponent(id)}`
 }

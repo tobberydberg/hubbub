@@ -11,11 +11,13 @@ import { applyTheme } from './lib/themes'
 import { usePrefs } from './store/prefs'
 import { bootstrap } from './sync/engine'
 import { startPresence } from './sync/presence'
+import { startCalendarSync } from './sync/calendar'
 import { App } from './App'
 
 applyTheme(usePrefs.getState().theme)
 void bootstrap()
 startPresence()
+startCalendarSync()
 // Leave the call properly when the app quits
 window.hubbub.calls.onHangup(() => void leaveCall().finally(() => window.hubbub.calls.setActive(false)))
 

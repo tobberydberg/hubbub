@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react'
-import { Bell, Info, LayoutList, Monitor, Palette, Phone, SlidersHorizontal } from 'lucide-react'
+import {
+  Bell,
+  CalendarDays,
+  Info,
+  LayoutList,
+  Monitor,
+  Palette,
+  Phone,
+  SlidersHorizontal
+} from 'lucide-react'
 import type { DesktopSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
 import { useApp } from '@renderer/store/app'
 import { setBackgroundBlur, switchCamera, switchMicrophone, switchSpeaker } from '@renderer/calls/call'
 import { deviceLabel, playTestSound, useMediaDevices } from '@renderer/calls/devices'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
+import { useCalendar } from '@renderer/store/calendar'
+import { refreshCalendars } from '@renderer/sync/calendar'
 import { Modal, Toggle } from '../common/Modal'
 
-type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'desktop' | 'advanced' | 'about'
+type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'calendar' | 'desktop' | 'advanced' | 'about'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -28,6 +39,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
     { id: 'sidebar', label: 'Sidebar', icon: <LayoutList size={16} /> },
     { id: 'calls', label: 'Calls', icon: <Phone size={16} /> },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
     { id: 'desktop', label: 'Desktop', icon: <Monitor size={16} /> },
     { id: 'advanced', label: 'Advanced', icon: <SlidersHorizontal size={16} /> },
     { id: 'about', label: 'About', icon: <Info size={16} /> }
@@ -89,6 +101,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               >
                 <Toggle on={prefs.collapsedThreads} onChange={(v) => prefs.set({ collapsedThreads: v })} />
               </Row>
+              <Row
+                title="Show link previews"
+                sub="A preview under messages with a link: the page's title, description and picture, as your Nextcloud server fetches it."
+              >
+                <Toggle on={prefs.linkPreviews} onChange={(v) => prefs.set({ linkPreviews: v })} />
+              </Row>
             </>
           )}
 
@@ -134,6 +152,27 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           )}
 
           {tab === 'calls' && <CallsTab />}
+
+          {tab === 'calendar' && (
+            <>
+              <DefaultCalendars />
+              <Row title="Show week numbers" sub="In the small month, and in the week and month views">
+                <Toggle
+                  on={prefs.calendarWeekNumbers}
+                  onChange={(v) => prefs.set({ calendarWeekNumbers: v })}
+                />
+              </Row>
+              <Row title="Show weekends in the week view" sub="Monday to Sunday instead of Monday to Friday">
+                <Toggle on={prefs.calendarWeekends} onChange={(v) => prefs.set({ calendarWeekends: v })} />
+              </Row>
+              <Row
+                title="Next meeting in the chat sidebar"
+                sub="From 10 minutes before a meeting with a call until it ends, with Join"
+              >
+                <Toggle on={prefs.meetingStrip} onChange={(v) => prefs.set({ meetingStrip: v })} />
+              </Row>
+            </>
+          )}
 
           {tab === 'desktop' && <DesktopTab />}
 
@@ -271,6 +310,49 @@ function UpdateSection({ version }: { version: string }) {
         {action}
       </Row>
       {text && <div className="update-text">{text}</div>}
+    </>
+  )
+}
+
+/** Per server: the calendar new events go into */
+function DefaultCalendars() {
+  const order = useApp((s) => s.accountOrder)
+  const accounts = useApp((s) => s.accounts)
+  const calendars = useCalendar((s) => s.accounts)
+  const chosen = usePrefs((s) => s.defaultCalendars)
+  useEffect(() => {
+    for (const id of order) if (!useCalendar.getState().accounts[id]?.calendars) void refreshCalendars(id)
+  }, [order])
+  return (
+    <>
+      {order.map((id) => {
+        const writable = (calendars[id]?.calendars ?? []).filter((c) => c.writable)
+        const current = writable.find((c) => c.href === chosen[id]) ?? writable.find((c) => !c.sharedBy)
+        return (
+          <Row
+            key={id}
+            title="Default calendar for new events"
+            sub={order.length > 1 ? accounts[id]?.info.label : undefined}
+          >
+            <select
+              className="setting-select"
+              value={current?.href ?? ''}
+              disabled={!writable.length}
+              onChange={(e) =>
+                usePrefs.getState().set({ defaultCalendars: { ...chosen, [id]: e.target.value } })
+              }
+            >
+              {!writable.length && <option value="">Loading…</option>}
+              {writable.map((c) => (
+                <option key={c.href} value={c.href}>
+                  {c.name}
+                  {c.sharedBy ? ` (${c.sharedBy})` : ''}
+                </option>
+              ))}
+            </select>
+          </Row>
+        )
+      })}
     </>
   )
 }

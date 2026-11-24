@@ -48,6 +48,10 @@ function resolveTarget(url: URL): { path: string; ttl: number } | null {
       ttl: 30 * 60_000
     }
   }
+  // Link preview images, fetched and kept by Nextcloud (so the page's own site never sees the user)
+  if (kind === 'reference' && rest[0] && /^[a-f0-9]{16,64}$/i.test(rest[0])) {
+    return { path: `/index.php/core/references/preview/${rest[0]}`, ttl: 60 * 60_000 }
+  }
   if (kind === 'preview' && rest[0]) {
     const size = Math.min(Number(url.searchParams.get('size')) || 600, 2048)
     return {

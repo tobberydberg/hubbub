@@ -6,6 +6,39 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Link previews: a message with a link shows a preview of the first one, with the site, the page's title,
+  description and picture, like in Mattermost. Your Nextcloud server fetches the page (as for Talk on the web,
+  which shows the same preview), so the site never sees you. Can be turned off in Settings → Display.
+- The left sidebar can be made wider or narrower by dragging its edge; double-click for the default width.
+
+- Calendar: each server has a chat and a calendar switch under its icon in the left rail. The calendar shows
+  your Nextcloud calendars (the same ones, colors and sharing as Nextcloud Calendar) by day, week (Monday to
+  Friday, or with the weekend), month or as an agenda for the next two weeks. Calendars can be hidden, and
+  repeating events, invitations you haven't answered and all-day events show as in Nextcloud Calendar.
+  Changes made elsewhere appear within half a minute.
+- The event panel shows when and where, the reminders, who is invited and their answers, and for meetings
+  with a Talk conversation **Join call** (with the call options) and **Open chat**.
+- The next meeting with a call shows under the calendars, and from 10 minutes before it starts in the chat
+  sidebar too, with Join.
+- Answer invitations with Yes, Maybe or No in the event panel; Nextcloud tells the organizer.
+- Create events with **New event** or by clicking a free time in the day or week view, and edit or delete your
+  own: title, time or all day, repeat (daily, weekdays, weekly, monthly), calendar, place, reminder and
+  description. Invite people of your server or anyone by email address; Nextcloud sends the invitations, the
+  updates and the cancellations. **Add a Talk conversation** creates the meeting's conversation, with the
+  invited people of your server in it, and links it to the event.
+- Deleting one occurrence of a repeating event or the whole series. Edits to a repeating event apply to the
+  whole series.
+- Reminders from Nextcloud for your events show as desktop notifications; clicking one opens the event.
+- Repeating events can repeat every N days, weeks, months or years: on chosen weekdays, on chosen days of the
+  month or on, for example, the last Friday, in chosen months, and end never, after a number of times or on a
+  date. A summary says it in words. Rules set elsewhere that Hubbub can't show are kept as they are.
+- A default calendar for new events, per server, in Settings → Calendar.
+- Web addresses in an event's place and description are links.
+- Week numbers (ISO, Monday-first) in the small month, the week view and the month view, turned on in the new
+  Settings → Calendar, which also has the weekends in the week view and the next-meeting strip.
+
 ## [0.4.0] - 2026-11-24
 
 Call options with device checks, switching devices during calls, emoji by name, and macOS builds that keep

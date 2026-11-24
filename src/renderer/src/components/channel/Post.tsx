@@ -49,6 +49,8 @@ import { EmojiPopover } from '../common/EmojiPopover'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 import { Attachments } from './Attachments'
 import { MessageText } from './MessageText'
+import { LinkPreview } from './LinkPreview'
+import { firstLink } from '@renderer/lib/links'
 import { PollCard } from './PollCard'
 import { MessageEditor } from './Composer'
 import { pickTime, pinMessage, remindMe, removeReminder, unpinMessage } from '@renderer/sync/messaging'
@@ -89,6 +91,7 @@ export const Post = memo(function Post(props: PostProps) {
   const [emoji, setEmoji] = useState<Anchor | null>(null)
   const recent = usePrefs((s) => s.recentEmojis)
   const collapsed = usePrefs((s) => s.collapsedThreads)
+  const linkPreviews = usePrefs((s) => s.linkPreviews)
   const key = chatKey(accountId, token)
   const editing = useApp((s) => s.editing?.chatKey === key && s.editing.id === msg.id)
 
@@ -135,6 +138,8 @@ export const Post = memo(function Post(props: PostProps) {
   const r = toRenderable(msg, selfId)
   const rx = reactions(msg)
   const jumbo = !r.files.length && isEmojiOnly(r.markdown)
+  // Like Mattermost: a preview of the first link in a text message
+  const previewLink = linkPreviews && !isDeleted && !r.files.length && !r.poll ? firstLink(r.markdown) : null
   const showFooter = !inThread && !!thread && thread.replyCount > 0
   const parent = isFullMessage(msg.parent) ? msg.parent : null
 
@@ -188,6 +193,7 @@ export const Post = memo(function Post(props: PostProps) {
             className={jumbo ? 'jumbo' : ''}
           />
         )}
+        {previewLink && <LinkPreview accountId={accountId} link={previewLink} />}
         {r.poll && (
           <PollCard
             accountId={accountId}

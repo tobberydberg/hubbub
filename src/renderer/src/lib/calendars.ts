@@ -9,18 +9,19 @@ export interface Calendar {
 }
 
 /** Elements regardless of their namespace prefix (d:, D:, cal:, x1:, …) */
-const element = (name: string, xml: string): string[] =>
+export const element = (name: string, xml: string): string[] =>
   xml.match(new RegExp(`<(?:[\\w-]+:)?${name}\\b[^>]*?(?:/>|>[\\s\\S]*?</(?:[\\w-]+:)?${name}>)`, 'g')) ?? []
 
-const text = (name: string, xml: string): string =>
+export const text = (name: string, xml: string): string =>
   (element(name, xml)[0] ?? '').replace(/^<[^>]*>|<\/[^>]*>$/g, '').trim()
 
-const decode = (s: string): string =>
+export const decode = (s: string): string =>
   s
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
     .replace(/&amp;/g, '&')
 
 export function parseCalendars(xml: string): Calendar[] {

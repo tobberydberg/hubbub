@@ -38,6 +38,7 @@ import { Composer } from '../channel/Composer'
 import { MessageList } from '../channel/MessageList'
 import { FollowButton, Post } from '../channel/Post'
 import { RemindersPanel, ScheduledPanel } from './Lists'
+import { EventPanel } from '../calendar/EventPanel'
 import { usePrefs } from '@renderer/store/prefs'
 
 const DEFAULT_WIDTH = 400
@@ -79,11 +80,13 @@ export function Rhs() {
             ? 'Scheduled messages'
             : rhs.type === 'reminders'
               ? 'Upcoming reminders'
-              : 'Search Results'
+              : rhs.type === 'event'
+                ? 'Event'
+                : 'Search Results'
   const sub =
     rhs.type === 'search'
       ? `"${rhs.query}" on ${account.info.label}`
-      : rhs.type === 'reminders'
+      : rhs.type === 'reminders' || rhs.type === 'event'
         ? account.info.label
         : [room?.displayName, threadTitle].filter(Boolean).join(' · ')
 
@@ -150,7 +153,8 @@ export function Rhs() {
       {rhs.type === 'search' && <SearchPanel account={account} rhs={rhs} />}
       {rhs.type === 'scheduled' && <ScheduledPanel account={account} token={rhs.token} />}
       {rhs.type === 'reminders' && <RemindersPanel account={account} />}
-      {!room && rhs.type !== 'search' && rhs.type !== 'reminders' && (
+      {rhs.type === 'event' && <EventPanel accountId={account.info.id} eventId={rhs.eventId} />}
+      {!room && rhs.type !== 'search' && rhs.type !== 'reminders' && rhs.type !== 'event' && (
         <div className="empty-state">
           <p>This conversation is no longer available.</p>
         </div>
