@@ -6,6 +6,19 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Emoji by name: type `:` and a couple of letters (`:thu`) for suggestions, pick with the arrow keys and
+  Enter or Tab. A complete shortcode like `:tada:` or `:+1:` becomes the emoji.
+- Emoticons become emoji as you type: `:-)` 🙂, `;)` 😉, `:D` 😃, `<3` ❤️ and more. Backspace right after
+  brings the text back, nothing changes inside code, and it can be turned off in Settings → Advanced.
+
+### Fixed
+
+- "Check for Updates…" in the menu now always answers, in a dialog: up to date, downloading, ready to
+  restart, or what went wrong.
+- The message box no longer moves when "… is typing" appears or disappears under it.
+
 ## [0.3.0] - 2026-11-24
 
 Polls, pinned messages, reminders, scheduled messages, meetings, typing indicators, slash commands and

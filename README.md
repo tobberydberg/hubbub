@@ -29,9 +29,9 @@
 - **Slash commands.** Type `/` for the list: `/away`, `/dnd`, `/status`, `/msg @someone`, `/call`, `/invite`,
   `/join`, `/leave`, `/mute`, `/me`, `/shrug`, `/code`, `/search` and more. Unknown commands are sent as
   messages, so Talk bots still get them; start with `//` to send a message beginning with `/`.
-- **Chat.** Markdown, code blocks, tables, @mentions with autocomplete, emoji reactions, quote replies,
-  editing (↑ edits your last message) and deleting. Read receipts (✓ sent, ✓✓ read by everyone) when the
-  server shares read status.
+- **Chat.** Markdown, code blocks, tables, @mentions and `:emoji:` with autocomplete, emoticons that turn into
+  emoji (`:-)` → 🙂), emoji reactions, quote replies, editing (↑ edits your last message) and deleting. Read
+  receipts (✓ sent, ✓✓ read by everyone) when the server shares read status.
 - **Polls.** Create one from the message box or with `/poll`, with single or multiple answers and optionally
   hidden results; vote, change your vote and end it right in the conversation.
 - **Pinned messages.** Pin a message for a while or until unpinned; it shows in a bar at the top of the

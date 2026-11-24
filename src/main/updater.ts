@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, dialog, shell, type BrowserWindow, type MessageBoxOptions } from 'electron'
 import electronUpdater, { type UpdateInfo } from 'electron-updater'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -32,6 +32,8 @@ type Mode =
 let getWindow: () => BrowserWindow | null = () => null
 let lastStatus: UpdateStatus = { state: 'idle' }
 let mode: Mode = { kind: 'unsupported', reason: 'Not started' }
+/** A check from the menu answers in a dialog, as the app's window may show nothing about it */
+let answerInDialog = false
 /** Unsigned macOS: the downloaded app, swapped in when Hubbub quits */
 let pendingMacApp: string | null = null
 let macDownload: Promise<void> | null = null
@@ -40,6 +42,64 @@ function send(status: UpdateStatus): void {
   if (status.state !== 'downloading') console.log('[updates]', JSON.stringify(status))
   lastStatus = status
   getWindow()?.webContents.send('updates:status', status)
+  if (answerInDialog && status.state !== 'checking' && status.state !== 'idle') {
+    answerInDialog = false
+    void showAnswer(status)
+  }
+}
+
+async function showAnswer(status: UpdateStatus): Promise<void> {
+  const current = app.getVersion()
+  let options: MessageBoxOptions
+  switch (status.state) {
+    case 'not-available':
+      options = { message: 'You’re up to date', detail: `Hubbub ${current} is the newest version.` }
+      break
+    case 'available':
+      options = status.downloadUrl
+        ? {
+            message: `Hubbub ${status.version} is available`,
+            detail: `You have ${current}. ${status.note ?? ''}`.trim(),
+            buttons: ['Download', 'Later'],
+            defaultId: 0,
+            cancelId: 1
+          }
+        : {
+            message: `Hubbub ${status.version} is available`,
+            detail: 'It is downloading now, and Hubbub will offer to restart once it is ready.'
+          }
+      break
+    case 'downloading':
+      options = {
+        message: 'An update is downloading',
+        detail: 'Hubbub will offer to restart once it is ready.'
+      }
+      break
+    case 'downloaded':
+      options = {
+        message: `Hubbub ${status.version} is ready`,
+        detail: status.note ?? 'Restart Hubbub to start using it.',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+        cancelId: 1
+      }
+      break
+    case 'error':
+      options = { type: 'warning', message: 'Hubbub couldn’t check for updates', detail: status.message }
+      break
+    case 'unsupported':
+      options = { message: 'Updates aren’t available', detail: status.reason }
+      break
+    default:
+      return
+  }
+  const window = getWindow()
+  const { response } = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options)
+  if (response !== 0) return
+  if (status.state === 'available' && status.downloadUrl) void shell.openExternal(status.downloadUrl)
+  if (status.state === 'downloaded' && (options.buttons?.length ?? 0) > 1) installUpdate()
 }
 
 /** 'deb' or 'rpm' when installed from those packages (electron-builder writes this file) */
@@ -143,7 +203,9 @@ function downloadForMac(info: UpdateInfo): Promise<void> {
   return macDownload
 }
 
-export function checkForUpdates(): void {
+/** `fromMenu`: the user asked, so the answer is shown in a dialog. */
+export function checkForUpdates(fromMenu = false): void {
+  answerInDialog ||= fromMenu
   if (mode.kind === 'unsupported') {
     send(lastStatus)
     return

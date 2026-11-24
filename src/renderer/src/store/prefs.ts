@@ -34,6 +34,8 @@ interface PrefsState {
   cameraId: string | null
   /** Blur the background of our camera in calls */
   backgroundBlur: boolean
+  /** ":-)" becomes 🙂 and ":tada:" 🎉 while typing */
+  convertEmoticons: boolean
   /** Ring and show a notification when a call starts in a conversation */
   ringForCalls: boolean
   /** Width of the right-hand panel (threads, members, …) in pixels; null is the default */
@@ -71,6 +73,7 @@ export const usePrefs = create<PrefsState>()(
       cameraId: null,
       backgroundBlur: false,
       ringForCalls: true,
+      convertEmoticons: true,
       callLayout: 'grid',
       rhsWidth: null,
       lastAccountId: null,

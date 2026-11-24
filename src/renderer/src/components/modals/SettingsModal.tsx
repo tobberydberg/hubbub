@@ -144,6 +144,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               >
                 <Toggle on={prefs.sendOnCtrlEnter} onChange={(v) => prefs.set({ sendOnCtrlEnter: v })} />
               </Row>
+              <Row
+                title="Turn emoticons into emoji"
+                sub=":-) becomes 🙂 and :tada: becomes 🎉 as you type. Backspace right after brings the text back."
+              >
+                <Toggle on={prefs.convertEmoticons} onChange={(v) => prefs.set({ convertEmoticons: v })} />
+              </Row>
               <TrustedCertificates />
             </>
           )}

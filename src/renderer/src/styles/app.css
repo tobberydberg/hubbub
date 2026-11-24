@@ -1218,9 +1218,13 @@ a:hover {
   align-items: center;
   gap: 12px;
   font-size: 11px;
+  line-height: 16px;
   color: var(--cc-56);
   padding: 4px 2px 0;
-  min-height: 15px;
+  /* A fixed height: "Alice is typing…" coming and going mustn't move the message box */
+  height: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .composer-hint-text {
   margin-left: auto;
@@ -3593,4 +3597,11 @@ textarea.input {
 .info-muted {
   color: var(--cc-64);
   font-size: 12px;
+}
+
+.suggestion.emoji .emoji-char {
+  width: 24px;
+  font-size: 20px;
+  line-height: 24px;
+  text-align: center;
 }

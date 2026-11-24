@@ -20,7 +20,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
             label: app.name,
             submenu: [
               { role: 'about' },
-              { label: 'Check for Updates…', click: () => checkForUpdates() },
+              { label: 'Check for Updates…', click: () => checkForUpdates(true) },
               { type: 'separator' },
               { label: 'Settings…', accelerator: 'Cmd+,', click: send({ type: 'open-settings' }) },
               { type: 'separator' },
@@ -100,7 +100,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
     {
       role: 'help',
       submenu: [
-        ...(isMac ? [] : [{ label: 'Check for Updates…', click: () => checkForUpdates() }]),
+        ...(isMac ? [] : [{ label: 'Check for Updates…', click: () => checkForUpdates(true) }]),
         { label: 'Report an Issue…', click: () => shell.openExternal(ISSUES_URL) }
       ]
     }

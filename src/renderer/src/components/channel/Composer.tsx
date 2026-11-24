@@ -39,6 +39,14 @@ import {
 import { runCommand } from '@renderer/sync/commands'
 import { pickTime, scheduleMessage } from '@renderer/sync/messaging'
 import { choiceHint, laterChoices } from '@renderer/lib/time'
+import {
+  convertAtCaret,
+  convertLastWord,
+  emojiQuery,
+  searchEmoji,
+  type Conversion,
+  type EmojiSuggestion
+} from '@renderer/lib/emoji'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -123,6 +131,7 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const hasScheduled = useApp((s) => !!s.accounts[accountId]?.rooms[token]?.hasScheduledMessages)
   const [sendMenu, setSendMenu] = useState<Anchor | null>(null)
   const sendOnCtrlEnter = usePrefs((s) => s.sendOnCtrlEnter)
+  const convertEmoticons = usePrefs((s) => s.convertEmoticons)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
@@ -133,6 +142,18 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     items: MentionSuggestion[]
     index: number
   } | null>(null)
+
+  // Emoji: suggestions for ":name", and the last emoticon conversion, which Backspace undoes
+  const [emojiSuggest, setEmojiSuggest] = useState<{
+    start: number
+    query: string
+    items: EmojiSuggestion[]
+    index: number
+  } | null>(null)
+  const emojiDismissed = useRef<string | null>(null)
+  const lastConversion = useRef<(Conversion['undo'] & { after: string; caret: number }) | null>(null)
+  /** Where the caret goes once the changed text is rendered */
+  const caretAfterRender = useRef<number | null>(null)
 
   // Slash commands: suggestions while the command's name is typed, a usage hint after it
   const [commandIndex, setCommandIndex] = useState(0)
@@ -156,7 +177,12 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     [draftKey]
   )
 
-  useLayoutEffect(() => autosize(ref.current), [draft])
+  useLayoutEffect(() => {
+    autosize(ref.current)
+    const caret = caretAfterRender.current
+    caretAfterRender.current = null
+    if (caret !== null) ref.current?.setSelectionRange(caret, caret)
+  }, [draft])
 
   useEffect(() => {
     if (!disabled) ref.current?.focus()
@@ -191,6 +217,46 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     }
   }
 
+  const updateEmojiSuggest = (value: string, caret: number): void => {
+    const q = emojiQuery(value, caret)
+    if (!q || q.query === emojiDismissed.current) {
+      if (emojiSuggest) setEmojiSuggest(null)
+      return
+    }
+    emojiDismissed.current = null
+    const items = searchEmoji(q.query)
+    setEmojiSuggest(items.length ? { ...q, items, index: 0 } : null)
+  }
+
+  const insertEmoji = (s: EmojiSuggestion): void => {
+    if (!emojiSuggest || !ref.current) return
+    const caret = ref.current.selectionStart
+    const text = `${s.emoji} `
+    setDraft(draft.slice(0, emojiSuggest.start) + text + draft.slice(caret))
+    setEmojiSuggest(null)
+    caretAfterRender.current = emojiSuggest.start + text.length
+  }
+
+  /** As typed, with ":-) " or ":tada:" turned into the emoji when that's on */
+  const onInput = (el: HTMLTextAreaElement): void => {
+    let value = el.value
+    let caret = el.selectionStart
+    lastConversion.current = null
+    const typedOne = value.length === draft.length + 1 && caret === el.selectionEnd
+    const conversion = convertEmoticons && typedOne ? convertAtCaret(value, caret) : null
+    if (conversion) {
+      value = conversion.text
+      caret = conversion.caret
+      lastConversion.current = { ...conversion.undo, after: value, caret }
+      caretAfterRender.current = caret
+    }
+    setDraft(value)
+    updateSuggest(value, caret)
+    updateEmojiSuggest(value, caret)
+    if (value) typing.keystroke()
+    else typing.stop()
+  }
+
   const insertMention = (s: MentionSuggestion): void => {
     if (!suggest || !ref.current) return
     const caret = ref.current.selectionStart
@@ -219,11 +285,15 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     setDraft('')
     setThreadTitle(null)
     setSuggest(null)
+    setEmojiSuggest(null)
+    lastConversion.current = null
     if (replyTo) setApp((s) => void (s.replyTo[key] = null))
   }
 
+  const withEmoji = (text: string): string => (convertEmoticons ? convertLastWord(text) : text)
+
   const sendLater = async (at: number): Promise<void> => {
-    const text = unescapeSlash(draft.trim())
+    const text = unescapeSlash(withEmoji(draft.trim()))
     if (!text) return
     if (await scheduleMessage(accountId, token, text, at, extras())) sent()
   }
@@ -250,7 +320,7 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
         command.args
       )
     } else {
-      post(unescapeSlash(text))
+      post(unescapeSlash(withEmoji(text)))
     }
   }
 
@@ -301,6 +371,41 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
         setCommandsDismissed(true)
         return
       }
+    }
+    if (emojiSuggest) {
+      const n = emojiSuggest.items.length
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const d = e.key === 'ArrowDown' ? 1 : -1
+        setEmojiSuggest({ ...emojiSuggest, index: (emojiSuggest.index + d + n) % n })
+        return
+      }
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        e.preventDefault()
+        insertEmoji(emojiSuggest.items[emojiSuggest.index])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        emojiDismissed.current = emojiSuggest.query
+        setEmojiSuggest(null)
+        return
+      }
+    }
+    // Backspace right after an emoticon became an emoji brings the emoticon back
+    const conversion = lastConversion.current
+    if (
+      e.key === 'Backspace' &&
+      conversion &&
+      draft === conversion.after &&
+      e.currentTarget.selectionStart === conversion.caret &&
+      e.currentTarget.selectionEnd === conversion.caret
+    ) {
+      e.preventDefault()
+      lastConversion.current = null
+      caretAfterRender.current = conversion.caret
+      setDraft(conversion.text)
+      return
     }
     if (suggest && suggest.items.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -401,6 +506,25 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
             <b>/{commandHint.name}</b> {commandHint.args} — {commandHint.description}
           </div>
         )}
+        {emojiSuggest && (
+          <div className="suggestion-list">
+            <div className="suggestion-header">Emoji matching “:{emojiSuggest.query}”</div>
+            {emojiSuggest.items.map((s, i) => (
+              <button
+                key={s.emoji}
+                className={`suggestion emoji${i === emojiSuggest.index ? ' selected' : ''}`}
+                onMouseEnter={() => setEmojiSuggest({ ...emojiSuggest, index: i })}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  insertEmoji(s)
+                }}
+              >
+                <span className="emoji-char">{s.emoji}</span>
+                <span>:{s.code}:</span>
+              </button>
+            ))}
+          </div>
+        )}
         {suggest && suggest.items.length > 0 && (
           <div className="suggestion-list">
             <div className="suggestion-header">Mentions</div>
@@ -466,14 +590,14 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           value={draft}
           disabled={disabled}
           placeholder={disabled ? 'This conversation is read-only' : placeholder}
-          onChange={(e) => {
-            setDraft(e.target.value)
-            updateSuggest(e.target.value, e.target.selectionStart)
-            if (e.target.value) typing.keystroke()
-            else typing.stop()
-          }}
+          onChange={(e) => onInput(e.target)}
           onKeyDown={onKeyDown}
-          onBlur={() => setTimeout(() => setSuggest(null), 150)}
+          onBlur={() =>
+            setTimeout(() => {
+              setSuggest(null)
+              setEmojiSuggest(null)
+            }, 150)
+          }
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files)
             if (files.length) {
