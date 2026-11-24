@@ -1,6 +1,7 @@
 import type { AccountInfo } from '@shared/ipc'
 import { NotificationLevel, RoomType, type ChatMessage, type Room } from '@shared/talk-types'
 import { talk, TalkError } from '@renderer/api/talk'
+import { detectIncomingCalls } from '@renderer/calls/ringing'
 import { toPlainText } from '@renderer/lib/messages'
 import { chatKey, setApp, useApp, type AccountState } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
@@ -11,6 +12,8 @@ import { initThreadBaseline, refreshSubscribedThreads } from './threads'
 const ACTIVE_INTERVAL = 10_000
 const BACKGROUND_INTERVAL = 30_000
 const THREADS_INTERVAL = 60_000
+/** Cheap with ETags; a new Talk notification (call, mention) refreshes the conversations at once */
+const NOTIFICATIONS_INTERVAL = 4_000
 
 // --- Account sync -------------------------------------------------------------
 
@@ -18,17 +21,47 @@ class AccountSync {
   private timer: ReturnType<typeof setTimeout> | null = null
   private stopped = false
   private threadsRefreshedAt = 0
+  private notificationTimer: ReturnType<typeof setTimeout> | null = null
+  private notificationsEtag: string | undefined
+  /** Highest notification id seen; null until the first check */
+  private lastNotificationId: number | null = null
 
   constructor(readonly accountId: string) {}
 
   async start(): Promise<void> {
     await this.connect()
     this.schedule()
+    this.scheduleNotifications()
   }
 
   stop(): void {
     this.stopped = true
     if (this.timer) clearTimeout(this.timer)
+    if (this.notificationTimer) clearTimeout(this.notificationTimer)
+  }
+
+  private scheduleNotifications(): void {
+    if (this.stopped) return
+    this.notificationTimer = setTimeout(() => void this.checkNotifications(), NOTIFICATIONS_INTERVAL)
+  }
+
+  private async checkNotifications(): Promise<void> {
+    try {
+      if (useApp.getState().accounts[this.accountId]?.status === 'online') {
+        const res = await talk(this.accountId).notifications(this.notificationsEtag)
+        if (!res.notModified) {
+          this.notificationsEtag = res.etag
+          const last = this.lastNotificationId
+          const fresh = last !== null && res.list.some((n) => n.app === 'spreed' && n.notification_id > last)
+          this.lastNotificationId = Math.max(last ?? 0, ...res.list.map((n) => n.notification_id))
+          if (fresh) await this.poke()
+        }
+      }
+    } catch (err) {
+      // Without the notifications app the regular refresh still runs
+      if (err instanceof TalkError && err.status === 404) return
+    }
+    this.scheduleNotifications()
   }
 
   /** Refresh now and restart the timer. */
@@ -84,7 +117,10 @@ class AccountSync {
       const rooms = await talk(this.accountId).rooms()
       const prev = useApp.getState().accounts[this.accountId]
       if (!prev) return
-      if (prev.roomsLoaded) detectNotifications(prev, rooms)
+      if (prev.roomsLoaded) {
+        detectNotifications(prev, rooms)
+        detectIncomingCalls(prev, rooms)
+      }
       update(this.accountId, (a) => {
         const next: Record<string, Room> = {}
         for (const r of rooms) next[r.token] = r

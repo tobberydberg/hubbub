@@ -28,6 +28,8 @@ export interface OcsRequest {
   timeoutMs?: number
   /** Pass to allow cancelling a long-running request via abortRequest */
   requestId?: string
+  /** ETag of the last response: the server answers 304 when nothing changed */
+  ifNoneMatch?: string
 }
 
 export interface OcsResponse<T = unknown> {
@@ -63,11 +65,11 @@ export interface UploadResult {
 export type UpdateStatus =
   | { state: 'idle' }
   | { state: 'checking' }
-  /** downloadUrl is set when the update must be downloaded by hand (unsigned macOS builds) */
-  | { state: 'available'; version: string; downloadUrl?: string }
+  /** downloadUrl is set when the update must be downloaded by hand; note says why */
+  | { state: 'available'; version: string; downloadUrl?: string; note?: string }
   | { state: 'not-available' }
   | { state: 'downloading'; percent: number }
-  | { state: 'downloaded'; version: string }
+  | { state: 'downloaded'; version: string; note?: string }
   | { state: 'error'; message: string }
   | { state: 'unsupported'; reason: string }
 
@@ -79,6 +81,16 @@ export type MenuCommand =
   | { type: 'navigate'; direction: 'prev' | 'next'; unreadOnly: boolean }
   | { type: 'focus-search' }
   | { type: 'new-conversation' }
+
+/** A screen or window that can be shared in a call */
+export interface ScreenSource {
+  id: string
+  name: string
+  kind: 'screen' | 'window'
+  /** data: URL */
+  thumbnail: string
+  icon?: string
+}
 
 /** Settings that live in the main process because they matter before or without the window. */
 export interface DesktopSettings {
@@ -146,6 +158,19 @@ export interface HubbubApi {
     trust(host: string, fingerprint: string): Promise<void>
     list(): Promise<TrustedCertificate[]>
     remove(host: string): Promise<TrustedCertificate[]>
+  }
+  calls: {
+    /** Asks the operating system for microphone or camera access (macOS); true if granted */
+    mediaAccess(kind: 'microphone' | 'camera'): Promise<boolean>
+    /** Keeps the computer awake during a call, and makes quitting wait for the hang-up */
+    setActive(active: boolean): Promise<void>
+    /** The app is quitting: leave the call */
+    onHangup(cb: () => void): () => void
+    screenSources(): Promise<ScreenSource[]>
+    /** The source the next getDisplayMedia() call gets */
+    chooseScreen(id: string | null): Promise<void>
+    screenAccess(): Promise<'granted' | 'denied' | 'unknown'>
+    openScreenSettings(): Promise<void>
   }
   updates: {
     check(): Promise<void>

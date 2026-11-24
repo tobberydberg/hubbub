@@ -7,6 +7,7 @@ import type {
   MentionSuggestion,
   Participant,
   Room,
+  SignalingSettings,
   TalkCapabilities,
   ThreadInfo,
   UnifiedSearchEntry,
@@ -29,6 +30,7 @@ interface CallOptions {
   body?: Record<string, unknown>
   timeoutMs?: number
   requestId?: string
+  ifNoneMatch?: string
 }
 
 async function raw<T>(
@@ -50,6 +52,14 @@ async function call<T>(
   const res = await raw<T>(accountId, method, path, opts)
   if (!res.ok) throw new TalkError(res.error || `HTTP ${res.status}`, res.status)
   return res.data as T
+}
+
+export interface ServerNotification {
+  notification_id: number
+  app: string
+  object_type: string
+  object_id: string
+  subject: string
 }
 
 export interface MessagesPage {
@@ -96,14 +106,62 @@ export function talk(accountId: string) {
       post(`${SPREED}/v4/room/${token}/notify`, { level }),
     leave: (token: string) => del(`${SPREED}/v4/room/${token}/participants/self`),
     joinListed: (token: string) => post(`${SPREED}/v4/room/${token}/participants/active`, { force: true }),
-    createRoom: (body: { roomType: number; invite?: string; source?: string; roomName?: string }) =>
-      post<Room>(`${SPREED}/v4/room`, body),
+    createRoom: (body: {
+      roomType: number
+      invite?: string
+      source?: string
+      roomName?: string
+      /** Talk 21+ (conversation-creation-all) */
+      participants?: { users?: string[] }
+      objectType?: string
+      objectId?: string
+    }) => post<Room>(`${SPREED}/v4/room`, body),
     listedRooms: (searchTerm: string) => get<Room[]>(`${SPREED}/v4/listed-room`, { query: { searchTerm } }),
     participants: (token: string) =>
       get<Participant[]>(`${SPREED}/v4/room/${token}/participants`, { query: { includeStatus: true } }),
     setDescription: (token: string, description: string) =>
       put(`${SPREED}/v4/room/${token}/description`, { description }),
     rename: (token: string, roomName: string) => put(`${SPREED}/v4/room/${token}`, { roomName }),
+
+    /** Nextcloud notifications; `notModified` when the ETag still matches */
+    async notifications(
+      etag?: string
+    ): Promise<{ list: ServerNotification[]; etag?: string; notModified: boolean }> {
+      const res = await raw<ServerNotification[]>(
+        accountId,
+        'GET',
+        '/ocs/v2.php/apps/notifications/api/v2/notifications',
+        {
+          ifNoneMatch: etag,
+          timeoutMs: 15_000
+        }
+      )
+      if (res.status === 304) return { list: [], etag, notModified: true }
+      if (!res.ok) throw new TalkError(res.error || `HTTP ${res.status}`, res.status)
+      return { list: res.data ?? [], etag: res.headers.etag, notModified: false }
+    },
+
+    // Calls. Joining a call needs a conversation session, which Nextcloud keeps in a cookie.
+    signalingSettings: (token: string) =>
+      get<SignalingSettings>(`${SPREED}/v3/signaling/settings`, { query: { token } }),
+    /** Returns the Nextcloud session id; 409 when the user is already in the conversation elsewhere */
+    joinSession: (token: string, force: boolean) =>
+      raw<{ sessionId: string; inCall?: number }>(
+        accountId,
+        'POST',
+        `${SPREED}/v4/room/${token}/participants/active`,
+        { body: { force } }
+      ),
+    leaveSession: (token: string) => del(`${SPREED}/v4/room/${token}/participants/active`),
+    addParticipant: (token: string, userId: string) =>
+      post(`${SPREED}/v4/room/${token}/participants`, { newParticipant: userId, source: 'users' }),
+    /** Rings a conversation member who isn't in the call (moderators, send-call-notification) */
+    ring: (token: string, attendeeId: number) => post(`${SPREED}/v4/call/${token}/ring/${attendeeId}`),
+    joinCall: (token: string, body: { flags: number; silent?: boolean; recordingConsent?: boolean }) =>
+      post(`${SPREED}/v4/call/${token}`, body),
+    setCallFlags: (token: string, flags: number) => put(`${SPREED}/v4/call/${token}`, { flags }),
+    leaveCall: (token: string, all = false) =>
+      del(`${SPREED}/v4/call/${token}`, all ? { all: true } : undefined),
 
     // Chat
     async messages(

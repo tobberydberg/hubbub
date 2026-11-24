@@ -1,9 +1,10 @@
 {
   "name": "hubbub-desktop",
   "productName": "Hubbub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Mattermost-style desktop client for Nextcloud Talk with multi-server support",
   "main": "./out/main/index.js",
+  "desktopName": "io.github.tobberydberg.hubbub.desktop",
   "author": "Tobias Rydberg",
   "license": "Apache-2.0",
   "homepage": "https://github.com/tobberydberg/hubbub",

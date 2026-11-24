@@ -1,11 +1,17 @@
-import { useEffect } from 'react'
-import { MessagesSquare, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { MessagesSquare, Plus, X } from 'lucide-react'
 import { applyTheme } from '@renderer/lib/themes'
 import { setApp, useActiveAccount, useApp } from '@renderer/store/app'
+import { useCall } from '@renderer/store/call'
 import { usePrefs } from '@renderer/store/prefs'
 import { closeRhs, navigateRooms, selectAccount } from '@renderer/sync/actions'
 import { ChannelView } from './components/channel/ChannelView'
 import { ThreadsView } from './components/channel/ThreadsView'
+import { AddPeople } from './components/calls/AddPeople'
+import { CallPopout } from './components/calls/CallPopout'
+import { CallView } from './components/calls/CallView'
+import { IncomingCalls } from './components/calls/IncomingCalls'
+import { ScreenPicker } from './components/calls/ScreenPicker'
 import { GlobalHeader } from './components/GlobalHeader'
 import { ModalHost } from './components/modals/Modals'
 import { Rhs } from './components/rhs/Rhs'
@@ -150,20 +156,31 @@ function Toast() {
 
 function UpdateBanner() {
   const update = useApp((s) => s.update)
-  if (update.state === 'available' && update.downloadUrl) {
+  const [dismissed, setDismissed] = useState<string | null>(null)
+  if (update.state === 'available' && update.downloadUrl && dismissed !== update.version) {
     const url = update.downloadUrl
     return (
       <div className="update-banner">
         Hubbub {update.version} is available.
         <button onClick={() => void window.hubbub.app.openExternal(url)}>Download</button>
+        <button className="update-dismiss" title="Not now" onClick={() => setDismissed(update.version)}>
+          <X size={14} />
+        </button>
       </div>
     )
   }
-  if (update.state !== 'downloaded') return null
+  if (update.state !== 'downloaded' || dismissed === update.version) return null
   return (
     <div className="update-banner">
       Hubbub {update.version} is ready to install.
       <button onClick={() => void window.hubbub.updates.install()}>Restart now</button>
+      <button
+        className="update-dismiss"
+        title="Later (installs when you quit)"
+        onClick={() => setDismissed(update.version)}
+      >
+        <X size={14} />
+      </button>
     </div>
   )
 }
@@ -173,6 +190,10 @@ export function App() {
   useShortcuts()
   const initialized = useApp((s) => s.initialized)
   const hasAccounts = useApp((s) => s.accountOrder.length > 0)
+  const callExpanded = useCall((s) => !!s.active?.expanded)
+  const callPoppedOut = useCall((s) => !!s.active?.poppedOut)
+  const screenPicker = useCall((s) => !!s.active?.screenPicker)
+  const addPeople = useCall((s) => !!s.active?.addPeople)
 
   return (
     <div className={`app${isMac ? ' is-mac' : ''}`}>
@@ -185,13 +206,23 @@ export function App() {
           <>
             <ServerRail />
             <Sidebar />
-            <Center />
-            <Rhs />
+            {callExpanded ? (
+              <CallView />
+            ) : (
+              <>
+                <Center />
+                <Rhs />
+              </>
+            )}
           </>
         )}
       </div>
       <ModalHost />
       <Toast />
+      <IncomingCalls />
+      {callPoppedOut && <CallPopout />}
+      {screenPicker && !callPoppedOut && <ScreenPicker />}
+      {addPeople && !callPoppedOut && <AddPeople />}
     </div>
   )
 }

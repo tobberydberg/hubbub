@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Bell, Info, LayoutList, Monitor, Palette, SlidersHorizontal } from 'lucide-react'
+import { Bell, Info, LayoutList, Monitor, Palette, Phone, SlidersHorizontal } from 'lucide-react'
 import type { DesktopSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
 import { useApp } from '@renderer/store/app'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { Modal, Toggle } from '../common/Modal'
 
-type Tab = 'display' | 'notifications' | 'sidebar' | 'desktop' | 'advanced' | 'about'
+type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'desktop' | 'advanced' | 'about'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -15,7 +15,6 @@ const REPO_URL = 'https://github.com/tobberydberg/hubbub'
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('display')
   const prefs = usePrefs()
-  const update = useApp((s) => s.update)
   const [version, setVersion] = useState('')
 
   useEffect(() => {
@@ -26,6 +25,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     { id: 'display', label: 'Display', icon: <Palette size={16} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
     { id: 'sidebar', label: 'Sidebar', icon: <LayoutList size={16} /> },
+    { id: 'calls', label: 'Calls', icon: <Phone size={16} /> },
     { id: 'desktop', label: 'Desktop', icon: <Monitor size={16} /> },
     { id: 'advanced', label: 'Advanced', icon: <SlidersHorizontal size={16} /> },
     { id: 'about', label: 'About', icon: <Info size={16} /> }
@@ -131,6 +131,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </>
           )}
 
+          {tab === 'calls' && <CallsTab />}
+
           {tab === 'desktop' && <DesktopTab />}
 
           {tab === 'advanced' && (
@@ -147,33 +149,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
           {tab === 'about' && (
             <>
-              <Row title="Hubbub" sub={`Version ${version}`}>
-                <button className="btn btn-tertiary small" onClick={() => void window.hubbub.updates.check()}>
-                  Check for updates
-                </button>
-              </Row>
-              <div className="help" style={{ fontSize: 12, marginTop: 8 }}>
-                {update.state === 'checking' && 'Checking for updates…'}
-                {update.state === 'not-available' && 'You are running the latest version.'}
-                {update.state === 'available' &&
-                  !update.downloadUrl &&
-                  `Version ${update.version} is available and downloading.`}
-                {update.state === 'available' && update.downloadUrl && (
-                  <>
-                    Version {update.version} is available.{' '}
-                    <button
-                      className="btn-link"
-                      onClick={() => void window.hubbub.app.openExternal(update.downloadUrl!)}
-                    >
-                      Download it from GitHub
-                    </button>
-                  </>
-                )}
-                {update.state === 'downloading' && `Downloading update… ${update.percent}%`}
-                {update.state === 'downloaded' && `Version ${update.version} is ready — restart to install.`}
-                {update.state === 'error' && `Update check failed: ${update.message}`}
-                {update.state === 'unsupported' && update.reason}
-              </div>
+              <UpdateSection version={version} />
               <Row title="Source code" sub="Hubbub is open source under the Apache License 2.0">
                 <button
                   className="btn btn-tertiary small"
@@ -202,6 +178,142 @@ function Row({ title, sub, children }: { title: string; sub?: string; children: 
       </div>
       {children}
     </div>
+  )
+}
+
+function UpdateSection({ version }: { version: string }) {
+  const update = useApp((s) => s.update)
+  const open = (url: string): void => void window.hubbub.app.openExternal(url)
+  const whatsNew = (v: string): React.ReactNode => (
+    <button className="btn-link" onClick={() => open(`${REPO_URL}/releases/tag/v${v}`)}>
+      What’s new in {v}
+    </button>
+  )
+
+  let text: React.ReactNode = null
+  let action: React.ReactNode = (
+    <button className="btn btn-tertiary small" onClick={() => void window.hubbub.updates.check()}>
+      Check for updates
+    </button>
+  )
+  switch (update.state) {
+    case 'checking':
+      text = 'Checking for updates…'
+      action = (
+        <button className="btn btn-tertiary small" disabled>
+          Checking…
+        </button>
+      )
+      break
+    case 'not-available':
+      text = 'You have the latest version.'
+      break
+    case 'available':
+      if (update.downloadUrl) {
+        text = (
+          <>
+            Version {update.version} is available. {update.note} {whatsNew(update.version)}
+          </>
+        )
+        action = (
+          <button className="btn btn-primary small" onClick={() => open(update.downloadUrl!)}>
+            Download
+          </button>
+        )
+      } else {
+        text = (
+          <>
+            Downloading version {update.version}… {whatsNew(update.version)}
+          </>
+        )
+        action = null
+      }
+      break
+    case 'downloading':
+      text = (
+        <span className="update-progress">
+          <span style={{ width: `${update.percent}%` }} />
+        </span>
+      )
+      action = <span className="help">{update.percent}%</span>
+      break
+    case 'downloaded':
+      text = (
+        <>
+          Version {update.version} is ready to install. {update.note} {whatsNew(update.version)}
+        </>
+      )
+      action = (
+        <button className="btn btn-primary small" onClick={() => void window.hubbub.updates.install()}>
+          Restart now
+        </button>
+      )
+      break
+    case 'error':
+      text = `Checking for updates failed: ${update.message}`
+      break
+    case 'unsupported':
+      text = update.reason
+      action = null
+      break
+  }
+  return (
+    <>
+      <Row title="Hubbub" sub={`Version ${version}`}>
+        {action}
+      </Row>
+      {text && <div className="update-text">{text}</div>}
+    </>
+  )
+}
+
+function CallsTab() {
+  const prefs = usePrefs()
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  useEffect(() => {
+    const load = (): void => void navigator.mediaDevices.enumerateDevices().then(setDevices)
+    load()
+    navigator.mediaDevices.addEventListener('devicechange', load)
+    return () => navigator.mediaDevices.removeEventListener('devicechange', load)
+  }, [])
+  const inputs = devices.filter((d) => d.kind === 'audioinput' && d.deviceId !== 'default')
+  const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default')
+  const cameras = devices.filter((d) => d.kind === 'videoinput')
+  // Device names are only available once the app has been allowed to use the microphone
+  const unnamed = devices.some((d) => !d.label)
+  const select = (
+    value: string | null,
+    list: MediaDeviceInfo[],
+    onChange: (id: string | null) => void
+  ): React.ReactNode => (
+    <select className="setting-select" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">System default</option>
+      {list.map((d, i) => (
+        <option key={d.deviceId} value={d.deviceId}>
+          {d.label || `Device ${i + 1}`}
+        </option>
+      ))}
+    </select>
+  )
+  return (
+    <>
+      <Row
+        title="Ring for incoming calls"
+        sub="Rings and shows a notification when a call starts. Not while you are on Do not disturb."
+      >
+        <Toggle on={prefs.ringForCalls} onChange={(v) => prefs.set({ ringForCalls: v })} />
+      </Row>
+      <Row title="Microphone">
+        {select(prefs.microphoneId, inputs, (id) => prefs.set({ microphoneId: id }))}
+      </Row>
+      <Row title="Camera">{select(prefs.cameraId, cameras, (id) => prefs.set({ cameraId: id }))}</Row>
+      <Row title="Speaker">{select(prefs.speakerId, outputs, (id) => prefs.set({ speakerId: id }))}</Row>
+      {unnamed && (
+        <p className="help" style={{ fontSize: 12 }}>
+          Device names show up after your first call.
+        </p>
+      )}
+    </>
   )
 }
 

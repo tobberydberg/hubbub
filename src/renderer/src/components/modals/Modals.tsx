@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Globe, Lock, Search, X } from 'lucide-react'
+import { Check, Download, Globe, Lock, Search, X } from 'lucide-react'
 import { RoomType, type Room } from '@shared/talk-types'
 import { talk } from '@renderer/api/talk'
 import { formatEventTime, isMeeting, sortMeetings } from '@renderer/lib/events'
@@ -9,7 +9,9 @@ import { usePrefs } from '@renderer/store/prefs'
 import {
   createCategory,
   createChannel,
+  callPeople,
   joinListedRoom,
+  openConversationWith,
   openDirectMessage,
   openRoom,
   removeAccount,
@@ -45,7 +47,7 @@ export function ModalHost() {
     case 'switcher':
       return <ChannelSwitcher />
     case 'new-conversation':
-      return modal.kind === 'channel' ? <NewChannelModal /> : <DirectMessageModal />
+      return modal.kind === 'channel' ? <NewChannelModal /> : <PeopleModal kind={modal.kind} />
     case 'browse':
       return <BrowseChannelsModal />
     case 'category-name':
@@ -339,49 +341,103 @@ function NewChannelModal() {
   )
 }
 
-function DirectMessageModal() {
+/** Pick people: one for a direct message, several for a group message, or anyone to call. */
+function PeopleModal({ kind }: { kind: 'dm' | 'call' }) {
   const account = useActiveAccount()
   const accountId = account?.info.id
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
+  const [selected, setSelected] = useState<Person[]>([])
+  const [busy, setBusy] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const { people, loading, error } = usePeopleSearch(accountId, query)
-  const shown = people.slice(0, 200)
+  const shown = people.filter((p) => p.id !== account?.user?.id).slice(0, 200)
 
   useEffect(() => setIndex(0), [query])
 
   if (!account || !accountId) return null
-  const start = async (p: Person | undefined): Promise<void> => {
+  const isSelected = (p: Person): boolean => selected.some((s) => s.id === p.id)
+  const toggle = (p: Person | undefined): void => {
     if (!p) return
+    setSelected((list) =>
+      list.some((s) => s.id === p.id) ? list.filter((s) => s.id !== p.id) : [...list, p]
+    )
+    setQuery('')
+  }
+  const go = async (list: Person[]): Promise<void> => {
+    if (!list.length || busy) return
+    setBusy(true)
     try {
-      await openDirectMessage(accountId, p.id)
+      const refs = list.map((p) => ({ id: p.id, name: p.name }))
+      if (kind === 'call') await callPeople(accountId, refs)
+      else await openConversationWith(accountId, refs)
       close()
     } catch (err) {
       setStartError(errorText(err))
+      setBusy(false)
     }
   }
 
+  const action = kind === 'call' ? 'Call' : 'Go'
   return (
-    <Modal title="Direct Messages" onClose={close}>
+    <Modal
+      title={kind === 'call' ? 'Start a call' : 'Direct Messages'}
+      onClose={close}
+      footer={
+        <>
+          <span className="people-hint">
+            {kind === 'call'
+              ? 'Calls one person directly, or several people in a group message.'
+              : 'Pick one person for a direct message, or several for a group message.'}
+          </span>
+          <button className="btn btn-tertiary" onClick={close}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={!selected.length || busy}
+            onClick={() => void go(selected)}
+          >
+            {action}
+          </button>
+        </>
+      }
+    >
       {(startError || error) && <div className="error-box">{startError || error}</div>}
-      <input
-        className="input"
-        autoFocus
-        placeholder="Search by name, username or e-mail"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault()
-            setIndex((i) => Math.min(i + 1, shown.length - 1))
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault()
-            setIndex((i) => Math.max(i - 1, 0))
-          } else if (e.key === 'Enter') {
-            void start(shown[index])
-          }
-        }}
-      />
+      <div className="people-input">
+        {selected.map((p) => (
+          <span key={p.id} className="people-chip">
+            <Avatar accountId={accountId} userId={p.id} name={p.name} size={20} />
+            {p.name}
+            <button title={`Remove ${p.name}`} onClick={() => toggle(p)}>
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        <input
+          autoFocus
+          placeholder={selected.length ? 'Add more people' : 'Search by name, username or e-mail'}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setIndex((i) => Math.min(i + 1, shown.length - 1))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setIndex((i) => Math.max(i - 1, 0))
+            } else if (e.key === 'Enter') {
+              // Enter picks the highlighted person; with nothing typed it goes with the selection
+              if (selected.length && !query) void go(selected)
+              else if (!selected.length && (e.metaKey || e.ctrlKey))
+                void go(shown[index] ? [shown[index]] : [])
+              else toggle(shown[index])
+            } else if (e.key === 'Backspace' && !query && selected.length) {
+              setSelected((list) => list.slice(0, -1))
+            }
+          }}
+        />
+      </div>
       <div className="people-count">
         {loading && !people.length
           ? 'Loading people…'
@@ -391,30 +447,31 @@ function DirectMessageModal() {
         {loading && people.length > 0 && <span className="spinner small" />}
       </div>
       <div className="switcher-list people-list">
-        {shown.map((u, i) => {
-          const dm = dmRoomFor(account.rooms, u.id)
-          return (
-            <button
-              key={u.id}
-              className={`list-row${i === index ? ' selected' : ''}`}
-              onMouseEnter={() => setIndex(i)}
-              onClick={() => void start(u)}
-              ref={(el) => {
-                if (i === index) el?.scrollIntoView({ block: 'nearest' })
-              }}
-            >
-              <Avatar accountId={accountId} userId={u.id} name={u.name} size={32} status={u.status ?? null} />
-              <div className="lr-main">
-                <div className="lr-title">{u.name}</div>
-                <div className="lr-sub">
-                  @{u.id}
-                  {u.subline && u.subline !== u.id ? ` · ${u.subline}` : ''}
-                </div>
+        {shown.map((u, i) => (
+          <button
+            key={u.id}
+            className={`list-row${i === index ? ' selected' : ''}${isSelected(u) ? ' picked' : ''}`}
+            onMouseEnter={() => setIndex(i)}
+            onClick={() => toggle(u)}
+            ref={(el) => {
+              if (i === index) el?.scrollIntoView({ block: 'nearest' })
+            }}
+          >
+            <Avatar accountId={accountId} userId={u.id} name={u.name} size={32} status={u.status ?? null} />
+            <div className="lr-main">
+              <div className="lr-title">{u.name}</div>
+              <div className="lr-sub">
+                @{u.id}
+                {u.subline && u.subline !== u.id ? ` · ${u.subline}` : ''}
               </div>
-              {dm && <span className="lr-hint">Open conversation</span>}
-            </button>
-          )
-        })}
+            </div>
+            {isSelected(u) ? (
+              <Check size={18} className="lr-check" />
+            ) : (
+              dmRoomFor(account.rooms, u.id) && <span className="lr-hint">Direct message</span>
+            )}
+          </button>
+        ))}
         {!loading && !people.length && <div className="empty-state">No people found</div>}
       </div>
     </Modal>
@@ -531,14 +588,18 @@ function CategoryNameModal({ modal }: { modal: Extract<ModalState, { type: 'cate
 }
 
 function ConfirmModal({ modal }: { modal: Extract<ModalState, { type: 'confirm' }> }) {
+  const cancel = (): void => {
+    close()
+    modal.onCancel?.()
+  }
   return (
     <Modal
       title={modal.title}
-      onClose={close}
+      onClose={cancel}
       size="small"
       footer={
         <>
-          <button className="btn btn-tertiary" onClick={close}>
+          <button className="btn btn-tertiary" onClick={cancel}>
             Cancel
           </button>
           <button

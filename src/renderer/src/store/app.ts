@@ -68,7 +68,7 @@ export type ModalState =
   | { type: 'settings' }
   | { type: 'server-settings'; accountId: string }
   | { type: 'switcher' }
-  | { type: 'new-conversation'; kind: 'channel' | 'dm' }
+  | { type: 'new-conversation'; kind: 'channel' | 'dm' | 'call' }
   | { type: 'browse' }
   | { type: 'category-name'; accountId: string; categoryId?: string; initial?: string; moveToken?: string }
   | {
@@ -78,6 +78,7 @@ export type ModalState =
       confirmLabel: string
       danger?: boolean
       onConfirm: () => void
+      onCancel?: () => void
     }
   | { type: 'image'; src: string; name: string; link?: string }
 

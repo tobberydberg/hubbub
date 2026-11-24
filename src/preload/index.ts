@@ -38,6 +38,19 @@ const api: HubbubApi = {
     list: () => invoke('certs:list'),
     remove: (host) => invoke('certs:remove', host)
   },
+  calls: {
+    mediaAccess: (kind) => invoke('calls:mediaAccess', kind),
+    setActive: (active) => invoke('calls:setActive', active),
+    onHangup: (cb) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('calls:hangup', listener)
+      return () => ipcRenderer.removeListener('calls:hangup', listener)
+    },
+    screenSources: () => invoke('calls:screenSources'),
+    chooseScreen: (id) => invoke('calls:chooseScreen', id),
+    screenAccess: () => invoke('calls:screenAccess'),
+    openScreenSettings: () => invoke('calls:openScreenSettings')
+  },
   updates: {
     check: () => invoke('updates:check'),
     install: () => invoke('updates:install'),

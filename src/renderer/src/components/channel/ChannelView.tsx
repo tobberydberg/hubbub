@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react'
-import { BellOff, CalendarDays, ExternalLink, Info, Phone, Star, Users } from 'lucide-react'
+import { BellOff, CalendarDays, ExternalLink, Info, Star, Users } from 'lucide-react'
 import { NotificationLevel, RoomType, type Room } from '@shared/talk-types'
 import { formatEventRange } from '@renderer/lib/events'
 import { isCollapsedReply } from '@renderer/lib/messages'
@@ -8,9 +8,11 @@ import { usePrefs } from '@renderer/store/prefs'
 import { toggleFavorite, uploadFiles } from '@renderer/sync/actions'
 import { loadOlder } from '@renderer/sync/chat'
 import { useThreads, type ThreadEntry } from '@renderer/sync/threads'
+import { CallButton } from '../calls/CallButton'
 import { RoomIcon } from '../sidebar/Sidebar'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
+import { roomTitle } from '@renderer/lib/rooms'
 
 export function ChannelView({ account, room }: { account: AccountState; room: Room }) {
   const accountId = account.info.id
@@ -132,7 +134,7 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
     <header className="channel-header">
       <div className="ch-main">
         <div className="ch-title-row">
-          <span className="ch-title">{room.displayName}</span>
+          <span className="ch-title">{roomTitle(room, account.user?.displayname)}</span>
           <button
             className={`icon-btn small star-btn${room.isFavorite ? ' on' : ''}`}
             title={room.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -162,13 +164,7 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
           )}
         </div>
       </div>
-      <button
-        className={`icon-btn${room.hasCall ? ' active' : ''}`}
-        title={room.hasCall ? 'Join the ongoing call in your browser' : 'Start a call in your browser'}
-        onClick={() => void window.hubbub.app.openExternal(webUrl)}
-      >
-        <Phone size={18} />
-      </button>
+      {room.type !== RoomType.NoteToSelf && <CallButton account={account} room={room} />}
       {!isDm && room.type !== RoomType.NoteToSelf && (
         <button
           className={`icon-btn${rhs?.type === 'members' ? ' active' : ''}`}

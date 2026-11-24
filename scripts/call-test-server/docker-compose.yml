@@ -1,0 +1,65 @@
+# Local Nextcloud + Talk + High-Performance Backend for testing Hubbub calls.
+# Both containers share one network namespace, so the same URLs work on this computer and inside them:
+#   Nextcloud http://127.0.0.1:8090, signaling http://127.0.0.1:8081, STUN/TURN 127.0.0.1:3478
+name: hubbub-talk-test
+services:
+  hpb:
+    image: nextcloud/aio-talk:20261119_161514
+    ports:
+      - '127.0.0.1:8090:8090'
+      - '127.0.0.1:8081:8081'
+      - '127.0.0.1:8443:8443'
+      - '127.0.0.1:3478:3478/tcp'
+      - '127.0.0.1:3478:3478/udp'
+    environment:
+      NC_DOMAIN: '127.0.0.1:8090'
+      TURN_DOMAIN: '127.0.0.1'
+      TALK_PORT: '3478'
+      TURN_SECRET: ${TURN_SECRET}
+      SIGNALING_SECRET: ${SIGNALING_SECRET}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      AIO_LOG_LEVEL: info
+      # start.sh exports these, but it runs as a child of the entrypoint here
+      JANUS_LOG_LEVEL: '4'
+      ETURNAL_LOG_LEVEL: info
+    # The image expects one https Nextcloud. Here Nextcloud is plain http, plus https through the proxy
+    # below (with a self-signed certificate, hence skipverify)
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        /start.sh true &&
+        sed -i -e "s#urls = https://.*#urls = http://127.0.0.1:8090, https://127.0.0.1:8443#"
+        -e "s#^skipverify = false#skipverify = true#" /conf/signaling.conf &&
+        exec "$@"
+      - '--'
+    command: ['dinit', '--system', '--container', 'nats-server', 'eturnal', 'janus', 'signaling']
+  nextcloud:
+    image: nextcloud:35.0.3-apache
+    network_mode: service:hpb
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin-test-pw
+      NEXTCLOUD_TRUSTED_DOMAINS: '127.0.0.1:8090 localhost:8090'
+    # Apache listens on 8090 instead of 80, the port used from outside
+    entrypoint:
+      [
+        'bash',
+        '-c',
+        'sed -i "s/^Listen 80$/Listen 8090/" /etc/apache2/ports.conf && sed -i "s/:80>/:8090>/" /etc/apache2/sites-enabled/000-default.conf && exec /entrypoint.sh apache2-foreground'
+      ]
+    volumes: ['nc-data:/var/www/html']
+  # https://127.0.0.1:8443 for Talk in the browser, which only shares screens over https
+  proxy:
+    image: caddy:2.10-alpine
+    network_mode: service:hpb
+    # default_sni: browsers send no server name for an IP address
+    command:
+      - sh
+      - -c
+      - >-
+        printf '{\n default_sni 127.0.0.1\n}\nhttps://127.0.0.1:8443 {\n tls internal\n reverse_proxy 127.0.0.1:8090\n}\n'
+        > /tmp/Caddyfile && exec caddy run --config /tmp/Caddyfile
+volumes:
+  nc-data:

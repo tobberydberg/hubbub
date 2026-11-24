@@ -21,6 +21,9 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: Hubbub uses the microphone in calls.
+    NSCameraUsageDescription: Hubbub uses the camera in video calls.
   target:
     - target: dmg
       arch: [arm64, x64]
@@ -46,8 +49,11 @@ nsis:
   artifactName: ${productName}-Setup-${arch}.${ext}
 
 linux:
-  icon: build/icon.png
+  icon: build/icons
   executableName: hubbub
+  # Names the .desktop file after desktopName in package.json, which Electron also uses as the window's
+  # app id (Wayland) and WM_CLASS (X11): that is how the desktop matches windows to their icon
+  syncDesktopName: true
   category: Network;InstantMessaging;Chat
   synopsis: Mattermost-style desktop client for Nextcloud Talk
   maintainer: Tobias Rydberg <tobias.rydberg@cleura.com>

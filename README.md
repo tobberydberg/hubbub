@@ -22,12 +22,20 @@
   message. Follow threads, and see the ones you follow (including unread ones) in the **Threads** view.
 - **Meetings.** Conversations the Calendar creates for events get their own Meetings category with the
   meeting time; past meetings tidy themselves away. You can mark other conversations as meetings too.
+- **Group messages.** Direct messages with several people, listed under Direct Messages like in Mattermost
+  (Talk's own way of adding people to a one-to-one conversation, so they work in Talk too).
 - **Chat.** Markdown, code blocks, tables, @mentions with autocomplete, emoji reactions, quote replies,
   editing (↑ edits your last message) and deleting.
 - **Files.** Upload with the paperclip, drag and drop, or paste. Images show inline previews.
 - **Find anything.** <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> jumps to any conversation or person on any server, with
   Unread and Meetings filters; the search bar searches messages.
 - **Mark as unread** from any message (or <kbd>Alt</kbd>+click), and drafts are kept across restarts.
+- **Calls.** Start or join an audio or video call from any conversation, or call several people at once
+  from the + menu. Share your entire screen or a single window, raise your hand, send reactions and add people
+  to a running call. A call widget in the sidebar shows who is talking; the call view shows everyone in a grid
+  or the speaker large, and can pop out into its own window so you can keep chatting in the main one. Incoming
+  calls ring within seconds, with Join and Decline. Works together with Talk on the web and on phones. Needs a
+  server with the High-Performance Backend; other calls open in the browser.
 - **Notifications.** Desktop notifications for direct messages and mentions, which respect each
   conversation's notification level, plus dock/taskbar badges.
 - **Themes.** Denim, Sapphire, Quartz, Indigo and Onyx, or follow the system's light/dark setting.
@@ -72,6 +80,14 @@ release notes are on the [Releases page](https://github.com/tobberydberg/hubbub/
 >   automatically on macOS until the app is signed; Hubbub tells you when a new version is out.
 > - **Windows:** choose **More info → Run anyway** in the SmartScreen prompt.
 
+**Updates.** Hubbub checks GitHub for new versions on start and every few hours (or via Settings → About →
+Check for updates), downloads them in the background and installs them when you click **Restart now** or quit:
+
+- **macOS:** keep Hubbub in your Applications folder; when it runs from a disk image or straight from Downloads,
+  it can only tell you that a new version is out.
+- **Windows** and the **Linux AppImage:** fully automatic.
+- **Linux .deb/.rpm:** installs on **Restart now** and asks for your password, like a package manager.
+
 Then click **Add a server**, enter your Nextcloud address, and approve access in the browser window that opens.
 If your server does not allow the browser login, use **Sign in with an app password instead** (create one under
 _Personal settings → Security → Devices & sessions_).
@@ -91,7 +107,8 @@ _Personal settings → Security → Devices & sessions_).
 
 ## Not yet supported
 
-- **Voice and video calls.** The call button opens the conversation in your browser for now.
+- **Calls without the High-Performance Backend**, end-to-end encrypted calls and calls in federated
+  conversations open in your browser.
 - Polls, voice messages and shared locations are shown as links or files, not as rich widgets.
 - Typing indicators and read receipts.
 

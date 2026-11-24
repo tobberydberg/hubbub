@@ -56,6 +56,7 @@ export async function ocsRequest(creds: Credentials, req: OcsRequest): Promise<O
 
   try {
     const headers = authHeaders(creds)
+    if (req.ifNoneMatch) headers['If-None-Match'] = req.ifNoneMatch
     let body: string | undefined
     if (req.body !== undefined) {
       headers['Content-Type'] = 'application/json'
@@ -70,7 +71,7 @@ export async function ocsRequest(creds: Credentials, req: OcsRequest): Promise<O
 
     const outHeaders: Record<string, string> = {}
     res.headers.forEach((v, k) => {
-      if (k.startsWith('x-')) outHeaders[k] = v
+      if (k.startsWith('x-') || k === 'etag') outHeaders[k] = v
     })
 
     if (res.status === 304) return { ok: true, status: 304, data: null, headers: outHeaders }

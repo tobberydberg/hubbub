@@ -28,6 +28,14 @@ interface PrefsState {
   sortMode: Record<string, Record<string, SortMode>>
   localCategories: Record<string, LocalCategory[]>
   recentEmojis: string[]
+  /** Call devices; null uses the system default */
+  microphoneId: string | null
+  speakerId: string | null
+  cameraId: string | null
+  /** Ring and show a notification when a call starts in a conversation */
+  ringForCalls: boolean
+  /** Call view: everyone the same size, or the speaker large */
+  callLayout: 'grid' | 'speaker'
   lastAccountId: string | null
   lastRooms: Record<string, string>
 
@@ -54,6 +62,11 @@ export const usePrefs = create<PrefsState>()(
       sortMode: {},
       localCategories: {},
       recentEmojis: ['👍', '✅', '😂', '❤️', '🎉', '👀'],
+      microphoneId: null,
+      speakerId: null,
+      cameraId: null,
+      ringForCalls: true,
+      callLayout: 'grid',
       lastAccountId: null,
       lastRooms: {},
 

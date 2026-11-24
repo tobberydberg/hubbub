@@ -67,6 +67,29 @@ Key design points:
 - **Feature detection:** use `hasFeature(account, 'threads')`, which reads the server's Talk capabilities.
   Always degrade gracefully on older servers.
 
+## Testing calls
+
+Calls go through Talk's High-Performance Backend, which the mock server doesn't have. A local Nextcloud with
+Talk, signaling server, media server and TURN runs in Docker:
+
+```bash
+scripts/call-test-server/setup.sh   # prints app passwords for the users alice, bob and carol
+```
+
+Add `http://127.0.0.1:8090` in Hubbub with one of those app passwords (not the login password: Nextcloud then
+renews the session on every request, and Talk loses track of the call session). Run a second copy of the app
+with another profile and `HUBBUB_FAKE_MEDIA=1` for a fake microphone and camera:
+
+```bash
+HUBBUB_FAKE_MEDIA=1 HUBBUB_USER_DATA=/tmp/hubbub-bob npx electron-vite preview --skipBuild
+```
+
+To check that calls work with the official client, join the same call in a browser at `http://127.0.0.1:8090`,
+or at `https://127.0.0.1:8443` (self-signed certificate) to share a screen from the browser, which Talk only
+allows over https. With `HUBBUB_FAKE_MEDIA=1` the screen picker offers a test screen instead of your real ones,
+so macOS doesn't ask for the Screen Recording permission.
+`docker compose down -v` in `scripts/call-test-server` removes everything again.
+
 ## Taking screenshots
 
 Development builds can capture a screenshot automatically, which is handy for UI changes and the README:
@@ -97,9 +120,10 @@ Without these repository secrets the installers are built unsigned:
 | `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | App Store Connect API key for notarization                            |
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`                  | Base64 Windows code-signing `.pfx` and its password                   |
 
-Auto-update on macOS only works for signed builds: unsigned macOS builds are signed ad hoc (so Apple Silicon
-will open them) and point the user to the release page when an update is out. Windows and the Linux AppImage
-update without signing.
+Updates come from the release's `latest*.yml` manifests. Signed macOS builds use macOS's own updater; unsigned
+ones (signed ad hoc, so Apple Silicon opens them) download the release zip, check its SHA-512 and signature,
+and swap their app bundle when quitting (`src/main/mac-update.ts`). Windows, the Linux AppImage and deb/rpm use
+electron-updater. Updater activity is logged to stdout as `[updates] …`.
 
 ## License
 

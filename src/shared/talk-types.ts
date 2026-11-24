@@ -102,6 +102,13 @@ export interface Room {
   canLeaveConversation?: boolean
   canDeleteConversation?: boolean
   hasCall?: boolean
+  /** Combined in-call flags of everyone in the call (see InCall) */
+  callFlag?: number
+  callStartTime?: number
+  /** 0: no notifications for calls in this conversation */
+  notificationCalling?: number
+  /** 1: participants must agree to recording before joining a call */
+  recordingConsent?: number
   status?: string
   statusIcon?: string | null
   statusMessage?: string | null
@@ -112,6 +119,28 @@ export interface Room {
   objectType?: string
   /** For 'event': "start#end" in unix seconds */
   objectId?: string
+}
+
+/** Participant in-call flags */
+export const InCall = {
+  Disconnected: 0,
+  InCall: 1,
+  Audio: 2,
+  Video: 4,
+  Phone: 8
+} as const
+
+/** Settings for connecting to the signaling server (GET /signaling/settings) */
+export interface SignalingSettings {
+  signalingMode: 'internal' | 'external' | 'conversation_cluster' | string
+  /** Signaling server URL, empty with internal signaling */
+  server: string
+  helloAuthParams: {
+    '1.0'?: { userid: string | null; ticket: string }
+    '2.0'?: { token: string }
+  }
+  stunservers: { urls: string[] }[]
+  turnservers: { urls: string[]; username: string; credential: string }[]
 }
 
 export interface ConversationTag {

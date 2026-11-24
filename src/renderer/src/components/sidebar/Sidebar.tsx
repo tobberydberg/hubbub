@@ -29,7 +29,8 @@ import {
   Trash2,
   UserPlus,
   UserX,
-  Video,
+  Users,
+  Phone,
   CheckCheck,
   MailWarning,
   FolderInput,
@@ -57,6 +58,8 @@ import {
 } from '@renderer/sync/actions'
 import { getSync, roomMentionCount } from '@renderer/sync/engine'
 import { useThreads } from '@renderer/sync/threads'
+import { useCall } from '@renderer/store/call'
+import { CallWidget } from '../calls/CallWidget'
 import { Avatar } from '../common/Avatar'
 import { isCertificateError } from '../common/Certificate'
 import {
@@ -68,6 +71,7 @@ import {
   useMenuState,
   type Anchor
 } from '../common/Menu'
+import { isGroupMessage, roomTitle } from '@renderer/lib/rooms'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -84,7 +88,12 @@ export function Sidebar() {
   const plusMenu = useMenuState()
   const unreadThreads = useThreads(account).some((t) => t.following && t.unread)
 
-  if (!account) return <aside className="sidebar" />
+  if (!account)
+    return (
+      <aside className="sidebar">
+        <CallWidget />
+      </aside>
+    )
   const accountId = account.info.id
   const threads = hasFeature(account, 'threads')
 
@@ -136,6 +145,8 @@ export function Sidebar() {
           <div className="sidebar-empty">No conversations yet</div>
         )}
       </div>
+
+      <CallWidget />
 
       {headerMenu.state && (
         <Menu anchor={headerMenu.state.anchor} onClose={headerMenu.close}>
@@ -193,6 +204,14 @@ export function Sidebar() {
             onClick={() => {
               plusMenu.close()
               setApp({ modal: { type: 'new-conversation', kind: 'dm' } })
+            }}
+          />
+          <MenuItem
+            icon={<Phone size={18} />}
+            label="Start a call"
+            onClick={() => {
+              plusMenu.close()
+              setApp({ modal: { type: 'new-conversation', kind: 'call' } })
             }}
           />
           <MenuItem
@@ -408,6 +427,7 @@ function Category({ account, cat }: { account: AccountState; cat: SidebarCategor
 export function RoomIcon({ accountId, room, size = 18 }: { accountId: string; room: Room; size?: number }) {
   const overrides = usePrefs((s) => s.meetingOverrides[accountId])
   if (isMeeting(room, overrides)) return <CalendarDays size={size} />
+  if (isGroupMessage(room)) return <Users size={size} />
   switch (room.type) {
     case RoomType.OneToOne:
       return (
@@ -445,6 +465,7 @@ function RoomItem({ account, room }: { account: AccountState; room: Room }) {
   )
   const [menu, setMenu] = useState<{ anchor: Anchor; mode: 'main' | 'move' } | null>(null)
   const [dragging, setDragging] = useState(false)
+  const inCall = useCall((s) => s.active?.accountId === accountId && s.active.token === room.token)
 
   const openMenu = (e: MouseEvent, fromButton: boolean): void => {
     e.preventDefault()
@@ -478,11 +499,18 @@ function RoomItem({ account, room }: { account: AccountState; room: Room }) {
         <span className="sidebar-item-icon">
           <RoomIcon accountId={accountId} room={room} />
         </span>
-        <span className="sidebar-item-name">{room.displayName}</span>
+        <span className="sidebar-item-name">{roomTitle(room, account.user?.displayname)}</span>
         {eventLabel && (
           <span className={`sidebar-item-meta${isOngoing(room) ? ' now' : ''}`}>{eventLabel}</span>
         )}
-        {room.hasCall && <Video size={14} />}
+        {room.hasCall && (
+          <span
+            className={`sidebar-call${inCall ? ' joined' : ''}`}
+            title={inCall ? 'You are in this call' : 'Call in progress'}
+          >
+            <Phone size={13} />
+          </span>
+        )}
         {mentions > 0 && <span className="sidebar-badge">{mentions > 99 ? '99+' : mentions}</span>}
         <button className={`mini-btn item-menu-btn${menu ? ' open' : ''}`} onClick={(e) => openMenu(e, true)}>
           <MoreVertical size={14} />

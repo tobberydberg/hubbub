@@ -1,4 +1,5 @@
 import { RoomType, type ConversationTag, type Room } from '@shared/talk-types'
+import { isGroupMessage } from './rooms'
 import type { LocalCategory, SortMode } from '@renderer/store/prefs'
 import { isMeeting, isSoon, meetingEnd, sortMeetings } from './events'
 
@@ -32,7 +33,10 @@ export interface CategoryInput {
 }
 
 export const isDirect = (r: Room): boolean =>
-  r.type === RoomType.OneToOne || r.type === RoomType.OneToOneFormer || r.type === RoomType.NoteToSelf
+  r.type === RoomType.OneToOne ||
+  r.type === RoomType.OneToOneFormer ||
+  r.type === RoomType.NoteToSelf ||
+  isGroupMessage(r)
 
 export function sortRooms(rooms: Room[], mode: SortMode): Room[] {
   const copy = [...rooms]

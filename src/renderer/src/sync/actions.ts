@@ -4,7 +4,18 @@ import { talk } from '@renderer/api/talk'
 import { buildCategories, isDirect, visibleRooms, type SidebarCategory } from '@renderer/lib/categories'
 import { isMeeting } from '@renderer/lib/events'
 import { newReferenceId, reactions, rootOf } from '@renderer/lib/messages'
-import { chatKey, emptyChat, setApp, showToast, useApp, type AccountState } from '@renderer/store/app'
+import {
+  chatKey,
+  emptyChat,
+  hasFeature,
+  setApp,
+  showToast,
+  useApp,
+  type AccountState
+} from '@renderer/store/app'
+import { updateCall } from '@renderer/store/call'
+import { startCall, type CallHandover } from '@renderer/calls/call'
+import { GROUP_MESSAGE, groupMessageName, isGroupMessage } from '@renderer/lib/rooms'
 import { usePrefs, type LocalCategory } from '@renderer/store/prefs'
 import { applyMessages } from './chat'
 import { addAccountState, getSync, keepUnreadWhileOpen, removeAccountState, scheduleMarkRead } from './engine'
@@ -29,6 +40,7 @@ export function selectAccount(accountId: string): void {
 }
 
 export function openRoom(accountId: string, token: string): void {
+  updateCall((c) => void (c.expanded = false))
   setApp((s) => {
     const a = s.accounts[accountId]
     if (!a) return
@@ -49,6 +61,7 @@ export function openRoom(accountId: string, token: string): void {
 }
 
 export function showThreadsView(accountId: string): void {
+  updateCall((c) => void (c.expanded = false))
   setApp((s) => {
     const a = s.accounts[accountId]
     if (a) a.view = 'threads'
@@ -466,17 +479,79 @@ export async function createChannel(accountId: string, name: string, isPublic: b
   await openCreated(accountId, room)
 }
 
-export async function openDirectMessage(accountId: string, userId: string): Promise<void> {
+export async function openDirectMessage(accountId: string, userId: string): Promise<string> {
+  const room = await directMessageRoom(accountId, userId)
+  await openCreated(accountId, room)
+  return room.token
+}
+
+/** The one-to-one conversation with a user, created when there is none yet. */
+async function directMessageRoom(accountId: string, userId: string): Promise<Room> {
   const existing = Object.values(account(accountId)?.rooms ?? {}).find(
     (r) => r.type === RoomType.OneToOne && r.name === userId
   )
-  if (existing) return openRoom(accountId, existing.token)
-  const room = await talk(accountId).createRoom({
-    roomType: RoomType.OneToOne,
-    invite: userId,
-    source: 'users'
-  })
+  return (
+    existing ?? talk(accountId).createRoom({ roomType: RoomType.OneToOne, invite: userId, source: 'users' })
+  )
+}
+
+export interface PersonRef {
+  id: string
+  name: string
+}
+
+/**
+ * Opens the conversation with exactly these people: the one-to-one for one person, otherwise a group
+ * message. An existing group message with the same people is reused. Returns its token.
+ */
+export async function openConversationWith(accountId: string, people: PersonRef[]): Promise<string> {
+  if (people.length === 1) return openDirectMessage(accountId, people[0].id)
+  const a = account(accountId)
+  const self = a?.user
+  if (!a || !self) throw new Error('Not connected')
+  const api = talk(accountId)
+  const wanted = new Set(people.map((p) => p.id))
+
+  for (const room of Object.values(a.rooms).filter(isGroupMessage)) {
+    const members = await api.participants(room.token).catch(() => [])
+    const others = members
+      .filter((m) => m.actorType === 'users' && m.actorId !== self.id)
+      .map((m) => m.actorId)
+    if (others.length === wanted.size && others.every((id) => wanted.has(id))) {
+      openRoom(accountId, room.token)
+      return room.token
+    }
+  }
+
+  const roomName = groupMessageName([self.displayname, ...people.map((p) => p.name)])
+  let room: Room
+  if (hasFeature(a, 'conversation-creation-all')) {
+    // Talk only lets a conversation be "extended" from an existing one-to-one, like its own
+    // "add people" does; that marks it as a group message for everyone
+    const dm = await directMessageRoom(accountId, people[0].id)
+    room = await api.createRoom({
+      roomType: RoomType.Group,
+      roomName,
+      participants: { users: people.map((p) => p.id) },
+      objectType: GROUP_MESSAGE,
+      objectId: dm.token
+    })
+  } else {
+    room = await api.createRoom({ roomType: RoomType.Group, roomName })
+    for (const p of people) await api.addParticipant(room.token, p.id)
+  }
   await openCreated(accountId, room)
+  return room.token
+}
+
+/** An ad hoc call: opens the conversation with these people and calls them. */
+export async function callPeople(
+  accountId: string,
+  people: PersonRef[],
+  handover?: () => Promise<CallHandover | undefined>
+): Promise<void> {
+  const token = await openConversationWith(accountId, people)
+  await startCall(accountId, token, { handover: await handover?.() })
 }
 
 export async function joinListedRoom(accountId: string, token: string): Promise<void> {

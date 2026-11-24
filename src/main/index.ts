@@ -22,6 +22,20 @@ import {
   trustCertificate,
   withCertificateTrust
 } from './certificates'
+import {
+  CALL_WINDOW,
+  callWindowOptions,
+  chooseScreenSource,
+  handleDisplayMedia,
+  hangUpBeforeQuit,
+  mediaAccess,
+  openScreenSettings,
+  screenAccess,
+  screenSources,
+  secureCallWindow,
+  setCallActive,
+  useFakeMediaForTests
+} from './calls'
 import { installContextMenu } from './context-menu'
 import {
   applySettings,
@@ -42,6 +56,7 @@ const APP_ID = 'io.github.tobberydberg.hubbub'
 
 // Development aids: a separate profile directory, and automated screenshots (see CONTRIBUTING.md)
 if (process.env.HUBBUB_USER_DATA) app.setPath('userData', process.env.HUBBUB_USER_DATA)
+useFakeMediaForTests()
 
 interface WindowState {
   x?: number
@@ -134,10 +149,17 @@ function createWindow(): void {
 
   installContextMenu(mainWindow, isSafeExternalUrl)
 
-  // Never open new Electron windows; send links to the default browser
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  // Never open new Electron windows, except the popped-out call; send links to the default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (url === 'about:blank' && frameName === CALL_WINDOW) {
+      return { action: 'allow', overrideBrowserWindowOptions: callWindowOptions() }
+    }
     if (isSafeExternalUrl(url)) shell.openExternal(url)
     return { action: 'deny' }
+  })
+  mainWindow.webContents.on('did-create-window', (child, { frameName }) => {
+    if (frameName === CALL_WINDOW) secureCallWindow(child)
+    else child.close()
   })
   mainWindow.webContents.on('will-navigate', (e, url) => {
     const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -158,11 +180,17 @@ async function captureScreenshot(file: string): Promise<void> {
   const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
   await wait(Number(process.env.HUBBUB_SCREENSHOT_DELAY ?? 4000))
   if (process.env.HUBBUB_SCREENSHOT_JS) {
-    await mainWindow?.webContents.executeJavaScript(process.env.HUBBUB_SCREENSHOT_JS)
+    const result = await mainWindow?.webContents.executeJavaScript(process.env.HUBBUB_SCREENSHOT_JS)
+    if (result !== undefined) console.log('[screenshot-js]', JSON.stringify(result))
     await wait(2500)
   }
   const image = await mainWindow?.webContents.capturePage()
   if (image) writeFileSync(file, image.toPNG())
+  // Other windows (the popped-out call) next to it, as name-2.png, …
+  const others = BrowserWindow.getAllWindows().filter((w) => w !== mainWindow)
+  for (const [i, win] of others.entries()) {
+    writeFileSync(file.replace(/(\.png)?$/, `-${i + 2}.png`), (await win.webContents.capturePage()).toPNG())
+  }
   app.quit()
 }
 
@@ -243,6 +271,12 @@ function registerIpc(): void {
     }
   })
 
+  handle('calls:mediaAccess', (kind: 'microphone' | 'camera') => mediaAccess(kind))
+  handle('calls:setActive', (active: boolean) => setCallActive(active, () => mainWindow))
+  handle('calls:screenSources', () => screenSources())
+  handle('calls:chooseScreen', (id: string | null) => chooseScreenSource(id))
+  handle('calls:screenAccess', () => screenAccess())
+  handle('calls:openScreenSettings', () => openScreenSettings())
   handle('updates:check', () => checkForUpdates())
   handle('updates:install', () => installUpdate())
 }
@@ -250,6 +284,7 @@ function registerIpc(): void {
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
   withCertificateTrust(session.defaultSession)
+  handleDisplayMedia(session.defaultSession)
   loadAccounts()
   handleMediaProtocol()
   registerIpc()
@@ -264,8 +299,9 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (e) => {
   quitting = true
+  if (hangUpBeforeQuit(() => mainWindow)) e.preventDefault()
 })
 
 app.on('window-all-closed', () => {

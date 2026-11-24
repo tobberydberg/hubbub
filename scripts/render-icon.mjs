@@ -1,13 +1,15 @@
 // Renders the SVG icons to the PNGs electron-builder and the app need. Run with: npm run icons
-//   build/icon.svg  -> build/icon.png (1024), resources/icon.png (512), src/renderer/src/assets/logo.svg
+//   build/icon.svg  -> build/icon.png (1024), resources/icon.png (512), src/renderer/src/assets/logo.svg,
+//                      build/icons/<size>x<size>.png (the sizes Linux icon themes look up)
 //   build/tray.svg  -> resources/tray.png (+ @2x) and resources/tray-unread.png (+ @2x)
 import { app, BrowserWindow } from 'electron'
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => readFileSync(join(root, p), 'utf8')
+const LINUX_SIZES = [16, 24, 32, 48, 64, 128, 256, 512]
 const UNREAD_DOT = '<circle cx="840" cy="184" r="184" fill="#d24b4e" stroke="#ffffff" stroke-width="48"/>'
 
 app.disableHardwareAcceleration()
@@ -42,6 +44,13 @@ app.whenReady().then(async () => {
   )
   copyFileSync(join(root, 'build/icon.svg'), join(root, 'src/renderer/src/assets/logo.svg'))
 
+  // Each size rendered from the SVG, so small ones stay sharp. Linux desktops only find icons in the
+  // sizes their icon theme lists, which usually stop at 512
+  mkdirSync(join(root, 'build/icons'), { recursive: true })
+  for (const size of LINUX_SIZES) {
+    writeFileSync(join(root, `build/icons/${size}x${size}.png`), (await render(icon, size)).toPNG())
+  }
+
   // Render trays large and downscale, which keeps the small sizes smooth
   const tray = read('build/tray.svg')
   const unread = tray.replace('</svg>', `${UNREAD_DOT}</svg>`)
@@ -59,6 +68,8 @@ app.whenReady().then(async () => {
       big.resize({ width: 32, height: 32, quality: 'best' }).toPNG()
     )
   }
-  console.log('Wrote build/icon.png, resources/icon.png, resources/tray*.png and the renderer logo')
+  console.log(
+    'Wrote build/icon.png, build/icons/, resources/icon.png, resources/tray*.png and the renderer logo'
+  )
   app.quit()
 })
