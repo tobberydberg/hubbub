@@ -150,6 +150,94 @@ describe('answers and occurrences', () => {
     expect(() => setAnswerIcs(invite, ['carol@example.test'], 'ACCEPTED')).toThrow()
   })
 
+  describe('one occurrence of a series', () => {
+    const series = newEventIcs(
+      draft({
+        start: at(2, 9),
+        end: at(2, 10),
+        repeat: presetRule('weekly', at(2, 9)),
+        attendees: [{ name: 'Alice Test', email: 'alice@example.test' }]
+      }),
+      'uid-10',
+      { name: 'Bob Test', email: 'bob@example.test' }
+    )
+    const occurrence = ICAL.Time.fromJSDate(new Date(at(9, 9)), true).toString()
+    const answers = (ics: string) =>
+      parseStored(ics)
+        .calendar.getAllSubcomponents('vevent')
+        .map((v) => ({
+          rid: v.getFirstProperty('recurrence-id')?.toICALString() ?? null,
+          start: v.getFirstProperty('dtstart')?.toICALString(),
+          partstat: v
+            .getAllProperties('attendee')
+            .find((a) => String(a.getFirstValue()).includes('alice'))
+            ?.getParameter('partstat')
+        }))
+
+    it('answers only that one, as an exception written in the series’ zone', () => {
+      const out = answers(setAnswerIcs(series, [me.email], 'DECLINED', occurrence))
+      const tz = localTimeZone()
+      expect(out).toEqual([
+        { rid: null, start: `DTSTART;TZID=${tz}:20261102T090000`, partstat: 'NEEDS-ACTION' },
+        {
+          rid: `RECURRENCE-ID;TZID=${tz}:20261109T090000`,
+          start: `DTSTART;TZID=${tz}:20261109T090000`,
+          partstat: 'DECLINED'
+        }
+      ])
+    })
+
+    it('changes an exception that is already there instead of adding one', () => {
+      const once = setAnswerIcs(series, [me.email], 'DECLINED', occurrence)
+      const out = answers(setAnswerIcs(once, [me.email], 'ACCEPTED', occurrence))
+      expect(out.map((o) => o.partstat)).toEqual(['NEEDS-ACTION', 'ACCEPTED'])
+    })
+
+    it('answers every occurrence, exceptions too, without one', () => {
+      const once = setAnswerIcs(series, [me.email], 'DECLINED', occurrence)
+      const out = answers(setAnswerIcs(once, [me.email], 'ACCEPTED'))
+      expect(out.map((o) => o.partstat)).toEqual(['ACCEPTED', 'ACCEPTED'])
+    })
+
+    it('uses the time zone the invitation defines (Outlook’s names)', () => {
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VTIMEZONE',
+        'TZID:W. Europe Standard Time',
+        'BEGIN:STANDARD',
+        'DTSTART:16010101T030000',
+        'TZOFFSETFROM:+0200',
+        'TZOFFSETTO:+0100',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10',
+        'END:STANDARD',
+        'BEGIN:DAYLIGHT',
+        'DTSTART:16010101T020000',
+        'TZOFFSETFROM:+0100',
+        'TZOFFSETTO:+0200',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3',
+        'END:DAYLIGHT',
+        'END:VTIMEZONE',
+        'BEGIN:VEVENT',
+        'UID:teams-1',
+        'DTSTART;TZID=W. Europe Standard Time:20261102T090000',
+        'DTEND;TZID=W. Europe Standard Time:20261102T093000',
+        'RRULE:FREQ=WEEKLY',
+        'SUMMARY:Standup',
+        'ORGANIZER:mailto:boss@corp.example',
+        'ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:alice@example.test',
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].join('\r\n')
+      const out = answers(setAnswerIcs(ics, [me.email], 'TENTATIVE', '2026-11-09T08:00:00Z'))
+      expect(out[1]).toEqual({
+        rid: 'RECURRENCE-ID;TZID=W. Europe Standard Time:20261109T090000',
+        start: 'DTSTART;TZID=W. Europe Standard Time:20261109T090000',
+        partstat: 'TENTATIVE'
+      })
+    })
+  })
+
   it('leaves out one occurrence', () => {
     const ics = newEventIcs(
       draft({ start: at(2, 9), end: at(2, 10), repeat: presetRule('weekly', at(2, 9)) }),

@@ -11,7 +11,9 @@ import {
   type Organizer
 } from '@renderer/lib/ical-edit'
 import { RoomType } from '@shared/talk-types'
-import { showToast, useApp } from '@renderer/store/app'
+import { formatDate } from '@renderer/lib/calendar-time'
+import { setApp, showToast, useApp } from '@renderer/store/app'
+import { useCalendar } from '@renderer/store/calendar'
 import { refreshCalendars } from './calendar'
 
 // Changing events on the server: answering invitations, creating, editing and deleting. Every
@@ -70,16 +72,21 @@ const ANSWER_TEXT: Record<Answer, string> = {
   DELEGATED: 'Delegated'
 }
 
+/** Answers an invitation; for a repeating event with `onlyThis` for this occurrence only */
 export async function answerInvitation(
   accountId: string,
   event: CalendarEvent,
-  answer: Answer
+  answer: Answer,
+  onlyThis = false
 ): Promise<boolean> {
   const email = account(accountId).user?.email
+  const occurrence = onlyThis ? event.recurrenceId : undefined
   try {
     if (!email) throw new Error('Your account has no email address')
-    await change(accountId, event.href, (ics) => setAnswerIcs(ics, [email], answer))
-    showToast(`${ANSWER_TEXT[answer]} to ${event.title}`)
+    await change(accountId, event.href, (ics) => setAnswerIcs(ics, [email], answer, occurrence))
+    showToast(
+      `${ANSWER_TEXT[answer]} to ${event.title}${occurrence ? ` on ${formatDate(event.start, { weekday: 'short' })}` : ''}`
+    )
     void refreshCalendars(accountId, true)
     return true
   } catch (err) {
@@ -115,6 +122,11 @@ export async function saveEvent(accountId: string, req: SaveRequest): Promise<bo
     if (req.existing) {
       const occurrence = req.existing.recurrenceId ? req.existing.start : undefined
       await change(accountId, req.existing.href, (ics) => updateEventIcs(ics, draft, organizer, occurrence))
+      if (req.calendarHref !== req.existing.calendarHref) {
+        const { href } = req.existing
+        await moveObject(accountId, href, req.calendarHref)
+        void refreshCalendars(accountId, true).then(() => followMove(href, req.calendarHref))
+      }
       showToast(draft.attendees.length ? 'Saved, and the invited people are told' : 'Saved')
     } else {
       const uid = newUid()
@@ -126,6 +138,52 @@ export async function saveEvent(accountId: string, req: SaveRequest): Promise<bo
     return true
   } catch (err) {
     showToast(`The event couldn’t be saved: ${errorText(err)}`, 'error')
+    return false
+  }
+}
+
+async function moveObject(accountId: string, href: string, calendarHref: string): Promise<void> {
+  const { etag } = await read(accountId, href)
+  const res = await window.hubbub.calendarObject(accountId, {
+    method: 'MOVE',
+    href,
+    destination: calendarHref,
+    etag
+  })
+  if (res.status === 412) throw new Error('There is already an event like it in that calendar')
+  if (res.status === 403) throw new Error('You may not move events between these calendars')
+  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`)
+}
+
+/** Once the calendars have reloaded: the side panel shows the event by its path, which a move changed */
+function followMove(href: string, calendarHref: string): void {
+  const rhs = useApp.getState().rhs
+  if (rhs?.type === 'event' && rhs.eventId.startsWith(`${href}#`)) {
+    const moved = `${calendarHref.replace(/\/?$/, '/')}${href.split('/').pop()}`
+    setApp({ rhs: { ...rhs, eventId: moved + rhs.eventId.slice(href.length) } })
+  }
+}
+
+/**
+ * Moves an event (the whole series for a repeating one) to another of the user's calendars. It
+ * stays the same event: invited people and the organizer aren't told, and answers are kept.
+ */
+export async function moveEvent(
+  accountId: string,
+  event: CalendarEvent,
+  calendarHref: string
+): Promise<boolean> {
+  try {
+    await moveObject(accountId, event.href, calendarHref)
+    const name = useCalendar
+      .getState()
+      .accounts[accountId]?.calendars?.find((c) => c.href === calendarHref)?.name
+    showToast(name ? `Moved to ${name}` : 'Event moved')
+    await refreshCalendars(accountId, true)
+    followMove(event.href, calendarHref)
+    return true
+  } catch (err) {
+    showToast(`The event couldn’t be moved: ${errorText(err)}`, 'error')
     return false
   }
 }

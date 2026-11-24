@@ -1,14 +1,18 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Plus, Video } from 'lucide-react'
-import type { CalendarEvent, CalendarInfo } from '@renderer/lib/caldav'
+import type { Answer, CalendarEvent, CalendarInfo } from '@renderer/lib/caldav'
 import {
   addMonths,
+  formatDate,
+  formatEventTime,
   formatTime,
   isoWeek,
   isSameDay,
+  startOfDay,
   startOfMonth,
   viewRange
 } from '@renderer/lib/calendar-time'
+import { answerInvitation } from '@renderer/sync/calendar-edit'
 import { setApp, useActiveAccount } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
 import { useCall } from '@renderer/store/call'
@@ -17,6 +21,7 @@ import {
   joinEventCall,
   nextcloudCalendarUrl,
   openEvent,
+  openInvitations,
   setCalendarDate,
   showCalendar,
   upcomingEvents
@@ -41,6 +46,7 @@ export function CalendarSidebar() {
         <MiniMonth accountId={accountId} />
         <CalendarList accountId={accountId} />
         <NextUp accountId={accountId} />
+        <Invitations accountId={accountId} />
         <button
           className="cal-side-link"
           onClick={() => void window.hubbub.app.openExternal(nextcloudCalendarUrl(accountId, Date.now()))}
@@ -120,6 +126,72 @@ function MiniMonth({ accountId }: { accountId: string }) {
 }
 
 const NONE: string[] = []
+
+/** The rest of the invitations are behind "Show more", so the month and calendars stay in view */
+const INVITATIONS_SHOWN = 3
+
+const ANSWERS: { answer: Answer; label: string }[] = [
+  { answer: 'ACCEPTED', label: 'Yes' },
+  { answer: 'TENTATIVE', label: 'Maybe' },
+  { answer: 'DECLINED', label: 'No' }
+]
+
+/** Invitations the user hasn't answered: from colleagues, and from mail when that is on */
+function Invitations({ accountId }: { accountId: string }) {
+  useCalendar((s) => s.accounts[accountId]?.invitations)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [all, setAll] = useState(false)
+  const list = openInvitations(accountId)
+  if (!list.length) return null
+  const shown = all ? list : list.slice(0, INVITATIONS_SHOWN)
+  const answer = async (e: CalendarEvent, a: Answer): Promise<void> => {
+    setBusy(e.id)
+    await answerInvitation(accountId, e, a)
+    setBusy(null)
+  }
+  return (
+    <div className="cal-section">
+      <div className="cal-section-title">Invitations · {list.length}</div>
+      {shown.map((e) => (
+        <div
+          key={e.id}
+          className={`cal-invite${busy === e.id ? ' busy' : ''}`}
+          onClick={() => {
+            setCalendarDate(accountId, startOfDay(e.start))
+            openEvent(accountId, e)
+          }}
+        >
+          <b>{e.title}</b>
+          <span className="cal-invite-when">
+            {formatDate(e.start)} · {formatEventTime(e)}
+          </span>
+          {e.organizer && (
+            <span className="cal-invite-from">From {e.organizer.name || e.organizer.email}</span>
+          )}
+          <span className="cal-invite-answers">
+            {ANSWERS.map((x) => (
+              <button
+                key={x.answer}
+                disabled={busy === e.id}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  void answer(e, x.answer)
+                }}
+              >
+                {x.label}
+              </button>
+            ))}
+          </span>
+        </div>
+      ))}
+      {list.length > INVITATIONS_SHOWN && (
+        <button className="cal-side-link" onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show ${list.length - INVITATIONS_SHOWN} more`}
+        </button>
+      )}
+    </div>
+  )
+}
 
 function CalendarList({ accountId }: { accountId: string }) {
   const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)

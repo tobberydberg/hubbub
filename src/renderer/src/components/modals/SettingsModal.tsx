@@ -17,6 +17,11 @@ import { deviceLabel, playTestSound, useMediaDevices } from '@renderer/calls/dev
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { useCalendar } from '@renderer/store/calendar'
 import { refreshCalendars } from '@renderer/sync/calendar'
+import {
+  mailInvitationState,
+  setMailInvitations,
+  type MailInvitationState
+} from '@renderer/sync/mail-invitations'
 import { Modal, Toggle } from '../common/Modal'
 
 type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'calendar' | 'desktop' | 'advanced' | 'about'
@@ -156,6 +161,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           {tab === 'calendar' && (
             <>
               <DefaultCalendars />
+              <MailInvitations />
               <Row title="Show week numbers" sub="In the small month, and in the week and month views">
                 <Toggle
                   on={prefs.calendarWeekNumbers}
@@ -314,6 +320,48 @@ function UpdateSection({ version }: { version: string }) {
   )
 }
 
+/** Per server: invitations that arrive in Nextcloud Mail go into the calendar */
+function MailInvitations() {
+  const order = useApp((s) => s.accountOrder)
+  const accounts = useApp((s) => s.accounts)
+  const enabled = usePrefs((s) => s.mailInvitations)
+  const [states, setStates] = useState<Record<string, MailInvitationState>>({})
+  useEffect(() => {
+    let alive = true
+    for (const id of order) {
+      void mailInvitationState(id).then((st) => alive && setStates((s) => ({ ...s, [id]: st })))
+    }
+    return () => {
+      alive = false
+    }
+  }, [order])
+  return (
+    <>
+      {order.map((id) => {
+        const st = states[id]
+        return (
+          <Row
+            key={id}
+            title={`Invitations from Nextcloud Mail${order.length > 1 ? ` · ${accounts[id]?.info.label}` : ''}`}
+            sub={
+              st && !st.available
+                ? st.reason
+                : 'Meeting invitations in your Nextcloud Mail inbox (from Microsoft Teams, Outlook, Google and others) are added to your default calendar, so you can see and answer them. The mails stay unread. Checked every few minutes while Hubbub runs.'
+            }
+          >
+            <Toggle
+              on={!!enabled[id] && st?.available !== false}
+              onChange={(v) => {
+                if (st?.available) setMailInvitations(id, v)
+              }}
+            />
+          </Row>
+        )
+      })}
+    </>
+  )
+}
+
 /** Per server: the calendar new events go into */
 function DefaultCalendars() {
   const order = useApp((s) => s.accountOrder)
@@ -338,9 +386,9 @@ function DefaultCalendars() {
               className="setting-select"
               value={current?.href ?? ''}
               disabled={!writable.length}
-              onChange={(e) =>
+              onChange={(e) => {
                 usePrefs.getState().set({ defaultCalendars: { ...chosen, [id]: e.target.value } })
-              }
+              }}
             >
               {!writable.length && <option value="">Loading…</option>}
               {writable.map((c) => (

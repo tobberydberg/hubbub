@@ -3,10 +3,22 @@ import { Calendar, MessagesSquare, Plus } from 'lucide-react'
 import { initials } from '@renderer/lib/messages'
 import { setApp, useApp } from '@renderer/store/app'
 import { reorderAccounts, selectAccount } from '@renderer/sync/actions'
-import { showCalendar } from '@renderer/sync/calendar'
+import { openInvitations, showCalendar } from '@renderer/sync/calendar'
+import { useCalendar } from '@renderer/store/calendar'
 import { accountTotals } from '@renderer/sync/engine'
 
 const shortcut = window.hubbub.platform === 'darwin' ? '⌘' : 'Ctrl+'
+
+/** How many invitations wait for an answer, on the calendar switch */
+function InvitationBadge({ accountId }: { accountId: string }) {
+  useCalendar((s) => s.accounts[accountId]?.invitations)
+  const n = openInvitations(accountId).length
+  return n ? (
+    <span className="server-mode-badge" title={`${n} unanswered ${n === 1 ? 'invitation' : 'invitations'}`}>
+      {n}
+    </span>
+  ) : null
+}
 
 export function ServerRail() {
   const order = useApp((s) => s.accountOrder)
@@ -74,6 +86,7 @@ export function ServerRail() {
                 >
                   <Calendar size={19} strokeWidth={1.75} />
                   <span className="server-mode-date">{new Date().getDate()}</span>
+                  <InvitationBadge accountId={id} />
                 </button>
               </div>
             )}

@@ -207,12 +207,100 @@ export function updateEventIcs(
   return calendar.toString()
 }
 
-/** Sets the user's answer on every occurrence they are invited to */
-export function setAnswerIcs(ics: string, myEmails: string[], answer: Answer): string {
-  const { calendar } = parseStored(ics)
+/**
+ * The occurrence of a repeating event that starts at `utc` (as the server reports it when it expands
+ * a series), written like the series' own start: in its time zone, so calendars match it to their
+ * occurrence by the text. UTC when the zone isn't known.
+ */
+function occurrenceId(calendar: ICAL.Component, master: ICAL.Component, utc: string): ICAL.Property {
+  const prop = new ICAL.Property('recurrence-id', master)
+  const at = ICAL.Time.fromString(utc, prop)
+  const dtstart = master.getFirstProperty('dtstart')
+  const tzid = dtstart?.getParameter('tzid')
+  if (at.isDate || typeof tzid !== 'string') {
+    prop.setValue(at)
+    return prop
+  }
+  const local = inZone(calendar, tzid, at.toJSDate())
+  if (local) {
+    prop.setValue(local)
+    prop.setParameter('tzid', tzid)
+  } else {
+    prop.setValue(at)
+  }
+  return prop
+}
+
+/** A moment as wall-clock time in a zone, from the event's own definition of it or by its name */
+function inZone(calendar: ICAL.Component, tzid: string, at: Date): ICAL.Time | null {
+  const vtimezone = calendar
+    .getAllSubcomponents('vtimezone')
+    .find((z) => z.getFirstPropertyValue('tzid') === tzid)
+  if (vtimezone) {
+    const t = ICAL.Time.fromJSDate(at, true).convertToZone(new ICAL.Timezone(vtimezone))
+    return ICAL.Time.fromData({
+      year: t.year,
+      month: t.month,
+      day: t.day,
+      hour: t.hour,
+      minute: t.minute,
+      second: t.second
+    })
+  }
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tzid,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric'
+      })
+        .formatToParts(at)
+        .map((p) => [p.type, Number(p.value)])
+    )
+    return ICAL.Time.fromData({
+      year: parts.year,
+      month: parts.month,
+      day: parts.day,
+      hour: parts.hour,
+      minute: parts.minute,
+      second: parts.second
+    })
+  } catch {
+    return null
+  }
+}
+
+/** Whether a stored exception is for this occurrence: written like the series, or in UTC */
+function sameOccurrence(own: ICAL.Property, id: ICAL.Property, utc: string): boolean {
+  if (own.toICALString() === id.toICALString()) return true
+  const value = own.getFirstValue() as ICAL.Time
+  return value.zone === ICAL.Timezone.utcTimezone && value.toString() === utc
+}
+
+/**
+ * Sets the user's answer on every occurrence they are invited to, or with `recurrenceId` on that
+ * one occurrence of a repeating event only (which then becomes an exception of its own).
+ */
+export function setAnswerIcs(ics: string, myEmails: string[], answer: Answer, recurrenceId?: string): string {
+  const { calendar, master } = parseStored(ics)
   const mine = new Set(myEmails.map((e) => e.toLowerCase()))
   let found = false
-  for (const vevent of calendar.getAllSubcomponents('vevent')) {
+  let vevents = calendar.getAllSubcomponents('vevent')
+  if (recurrenceId && master.hasProperty('rrule')) {
+    const id = occurrenceId(calendar, master, recurrenceId)
+    let instance = vevents.find((v) => {
+      const own = v.getFirstProperty('recurrence-id')
+      return !!own && sameOccurrence(own, id, recurrenceId)
+    })
+    if (!instance) instance = exceptionFor(calendar, master, id)
+    vevents = [instance]
+  }
+  for (const vevent of vevents) {
     for (const attendee of vevent.getAllProperties('attendee')) {
       if (!mine.has(emailOf(attendee))) continue
       attendee.setParameter('partstat', answer)
@@ -224,6 +312,32 @@ export function setAnswerIcs(ics: string, myEmails: string[], answer: Answer): s
   }
   if (!found) throw new Error('You are not invited to this event')
   return calendar.toString()
+}
+
+/** A copy of the series for one occurrence, as calendars store a changed occurrence */
+function exceptionFor(calendar: ICAL.Component, master: ICAL.Component, id: ICAL.Property): ICAL.Component {
+  const instance = new ICAL.Component(ICAL.helpers.clone(master.toJSON(), true))
+  for (const name of ['rrule', 'rdate', 'exdate', 'dtstart', 'dtend', 'duration', 'recurrence-id'])
+    instance.removeAllProperties(name)
+  const event = new ICAL.Event(master)
+  const start = (id.getFirstValue() as ICAL.Time).clone()
+  const length = event.endDate.subtractDate(event.startDate)
+  const tzid = id.getParameter('tzid')
+  const dtstart = new ICAL.Property('dtstart', instance)
+  dtstart.setValue(start)
+  const end = start.clone()
+  end.addDuration(length)
+  const dtend = new ICAL.Property('dtend', instance)
+  dtend.setValue(end)
+  if (typeof tzid === 'string') {
+    dtstart.setParameter('tzid', tzid)
+    dtend.setParameter('tzid', tzid)
+  }
+  instance.addProperty(dtstart)
+  instance.addProperty(dtend)
+  instance.addProperty(new ICAL.Property(ICAL.helpers.clone(id.toJSON(), true), instance))
+  calendar.addSubcomponent(instance)
+  return instance
 }
 
 /** Leaves out one occurrence of a repeating event */

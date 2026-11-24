@@ -145,11 +145,32 @@ export interface HubbubApi {
   /** The user's calendars, as the raw CalDAV response */
   calendars(accountId: string): Promise<string>
   /** Events of one calendar between two UTC times (yyyymmddThhmmssZ), repeats expanded; raw CalDAV */
-  calendarEvents(accountId: string, href: string, start: string, end: string): Promise<string>
-  /** Reads, writes or deletes one event in the user's calendars (ETag-checked); see main/http.ts */
+  calendarEvents(
+    accountId: string,
+    href: string,
+    start: string,
+    end: string,
+    unanswered?: boolean
+  ): Promise<string>
+  /** The event with this UID in one of the user's calendars (path and ETag), or null */
+  calendarFindByUid(
+    accountId: string,
+    calendarHref: string,
+    uid: string
+  ): Promise<{ href: string; etag: string | null } | null>
+  /**
+   * Reads, writes, deletes or moves (to the calendar `destination`) one event in the user's
+   * calendars, ETag-checked; see main/http.ts
+   */
   calendarObject(
     accountId: string,
-    req: { method: 'GET' | 'PUT' | 'DELETE'; href: string; body?: string; etag?: string | null }
+    req: {
+      method: 'GET' | 'PUT' | 'DELETE' | 'MOVE'
+      href: string
+      body?: string
+      etag?: string | null
+      destination?: string
+    }
   ): Promise<{ status: number; body: string; etag: string | null }>
   /** Another user's calendar addresses (mailto:…), for invitations */
   calendarAddresses(accountId: string, userId: string): Promise<string[]>

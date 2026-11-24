@@ -8,6 +8,18 @@ All notable changes to Hubbub are documented here. The format follows
 
 ### Added
 
+- Invitations from Nextcloud Mail: meeting invitations that arrive in your Nextcloud Mail inbox (from
+  Microsoft Teams, Outlook, Google and others) are added to your default calendar, once, and follow the
+  organizer's updates and cancellations. The mails stay unread. Turned on per server in Settings → Calendar;
+  works while Hubbub runs, checking the last 30 days of the inbox every 5 minutes (first fetching new mail into
+  Nextcloud Mail, which otherwise may not have it yet).
+- Invitations you haven't answered are listed in the calendar's sidebar, with Yes, Maybe and No, and counted on
+  the calendar switch in the server rail. That includes invitations from colleagues on your server.
+- Teams, Zoom, Google Meet and Webex meetings get a button to join them in the event panel.
+- An event can be moved to another of your calendars, also after you've answered it: pick the calendar in the
+  event panel or the edit dialog. Nobody is told, and the answers stay as they are.
+- A repeating invitation can be answered for every occurrence or for just one.
+
 - Link previews: a message with a link shows a preview of the first one, with the site, the page's title,
   description and picture, like in Mattermost. Your Nextcloud server fetches the page (as for Talk on the web,
   which shows the same preview), so the site never sees you. Can be turned off in Settings → Display.

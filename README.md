@@ -40,6 +40,9 @@
   reminders in the account menu.
 - **Send later and silently.** The arrow next to Send schedules a message or sends it without notifying
   anyone. Scheduled messages can be sent now, moved or deleted.
+- **Invitations from mail.** Meeting invitations in your Nextcloud Mail inbox, for example from Microsoft
+  Teams, are added to your calendar (the mails stay unread), and everything you haven't answered is listed with
+  Yes, Maybe and No.
 - **Calendar.** Your Nextcloud calendars next to the chat, by day, week, month or as an agenda, kept in sync
   with Nextcloud Calendar. Meetings with a Talk call join right in Hubbub, and the next one shows in the chat
   sidebar shortly before it starts.

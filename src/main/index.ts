@@ -52,6 +52,7 @@ import {
   davEvents,
   davMkcol,
   davObject,
+  davFindByUid,
   davPrincipalAddresses,
   davUpload,
   ocsRequest
@@ -245,10 +246,18 @@ function registerIpc(): void {
   handle('dav:addresses', (accountId: string, userId: string) =>
     davPrincipalAddresses(getCredentials(accountId), userId)
   )
-  handle('dav:events', (accountId: string, href: string, start: string, end: string) => {
+  handle(
+    'dav:events',
+    (accountId: string, href: string, start: string, end: string, unanswered?: boolean) => {
+      const account = getAccount(accountId)
+      if (!account) throw new Error('Unknown account')
+      return davEvents(getCredentials(accountId), account.userId, href, start, end, !!unanswered)
+    }
+  )
+  handle('dav:findByUid', (accountId: string, calendarHref: string, uid: string) => {
     const account = getAccount(accountId)
     if (!account) throw new Error('Unknown account')
-    return davEvents(getCredentials(accountId), account.userId, href, start, end)
+    return davFindByUid(getCredentials(accountId), account.userId, calendarHref, uid)
   })
   handle('dav:upload', async (req: UploadRequest): Promise<UploadResult> => {
     const account = getAccount(req.accountId)

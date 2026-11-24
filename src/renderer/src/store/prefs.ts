@@ -47,6 +47,10 @@ interface PrefsState {
   /** ISO week numbers in the mini month, the week and the month view */
   calendarWeekNumbers: boolean
   hiddenCalendars: Record<string, string[]>
+  /** Hubbub adds invitations from the Nextcloud Mail inbox to the calendar, per account */
+  mailInvitations: Record<string, boolean>
+  /** Mail messages whose invitations were handled, per account */
+  mailInvitesSeen: Record<string, number[]>
   /** The calendar new events go into, per account (its href) */
   defaultCalendars: Record<string, string>
   /** A strip in the chat sidebar for the next meeting with a call, from 10 minutes before */
@@ -102,6 +106,8 @@ export const usePrefs = create<PrefsState>()(
       calendarWeekNumbers: false,
       hiddenCalendars: {},
       defaultCalendars: {},
+      mailInvitations: {},
+      mailInvitesSeen: {},
       meetingStrip: true,
       startWithCamera: false,
       startMuted: false,

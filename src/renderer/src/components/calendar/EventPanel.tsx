@@ -18,7 +18,7 @@ import { setApp, useApp } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
 import { useCall } from '@renderer/store/call'
 import { findEvent, joinEventCall, nextcloudCalendarUrl, openEventChat } from '@renderer/sync/calendar'
-import { answerInvitation, deleteEvent } from '@renderer/sync/calendar-edit'
+import { answerInvitation, deleteEvent, moveEvent } from '@renderer/sync/calendar-edit'
 import { loadDirectory } from '@renderer/sync/people'
 import { Avatar } from '../common/Avatar'
 import { Linkified } from '../common/Linkified'
@@ -53,9 +53,8 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
   // Re-render when events reload, so the panel follows changes made elsewhere
   useCalendar((s) => s.accounts[accountId])
   const event = findEvent(accountId, eventId)
-  const calendar = useCalendar((s) =>
-    s.accounts[accountId]?.calendars?.find((c) => c.href === event?.calendarHref)
-  )
+  const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)
+  const calendar = calendars?.find((c) => c.href === event?.calendarHref)
   const roomName = useApp((s) =>
     event?.talkToken ? s.accounts[accountId]?.rooms[event.talkToken]?.displayName : undefined
   )
@@ -66,13 +65,19 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
   const [people, setPeople] = useState<Person[]>([])
   const [answering, setAnswering] = useState<Answer | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /** For a repeating event: answer for this occurrence only, or for all of them */
+  const [onlyThis, setOnlyThis] = useState(false)
+  const [moving, setMoving] = useState(false)
 
   useEffect(() => {
     void loadDirectory(accountId)
       .then((d) => setPeople(d.people))
       .catch(() => undefined)
   }, [accountId])
-  useEffect(() => setConfirmDelete(false), [eventId])
+  useEffect(() => {
+    setConfirmDelete(false)
+    setOnlyThis(false)
+  }, [eventId])
 
   if (!event) {
     return (
@@ -97,16 +102,27 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
   const mine = !event.organizer || event.organizer.isMe
   const canEdit = !!calendar?.writable && mine
   const answer = answering ?? event.myAnswer
+  // Events move between the user's own calendars (Nextcloud moves only within one owner's)
+  const own = (calendars ?? []).filter((c) => c.writable && !c.sharedBy)
+  const movable = !!calendar && own.includes(calendar) && own.length > 1
 
   const remove = async (onlyThis: boolean): Promise<void> => {
     if (await deleteEvent(accountId, event, onlyThis)) setApp({ rhs: null })
   }
 
   const respond = async (a: Answer): Promise<void> => {
-    if (a === event.myAnswer || answering) return
+    // The other occurrences of a series may have another answer than this one
+    if ((a === event.myAnswer && (onlyThis || !event.recurrenceId)) || answering) return
     setAnswering(a)
-    await answerInvitation(accountId, event, a)
+    await answerInvitation(accountId, event, a, onlyThis)
     setAnswering(null)
+  }
+
+  const move = async (href: string): Promise<void> => {
+    if (href === event.calendarHref || moving) return
+    setMoving(true)
+    await moveEvent(accountId, event, href)
+    setMoving(false)
   }
 
   return (
@@ -129,9 +145,28 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
         {calendar && (
           <div>
             <CalendarDays size={16} />
-            <span className="event-calendar" style={{ ['--c' as string]: calendar.color }}>
-              {calendar.name}
-            </span>
+            {movable ? (
+              <label className="event-calendar movable" style={{ ['--c' as string]: calendar.color }}>
+                <select
+                  className="input"
+                  aria-label="Calendar"
+                  title={event.recurrenceId ? 'Moves every occurrence' : 'Move to another calendar'}
+                  value={calendar.href}
+                  disabled={moving}
+                  onChange={(e) => void move(e.target.value)}
+                >
+                  {own.map((c) => (
+                    <option key={c.href} value={c.href}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span className="event-calendar" style={{ ['--c' as string]: calendar.color }}>
+                {calendar.name}
+              </span>
+            )}
           </div>
         )}
         {event.location && !event.talkToken && (
@@ -176,9 +211,31 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
         </div>
       )}
 
+      {event.onlineMeeting && !event.talkToken && (
+        <div className="event-actions">
+          <button
+            className={`ev-btn join${live ? ' live' : ''}`}
+            title={event.onlineMeeting.url}
+            onClick={() => void window.hubbub.app.openExternal(event.onlineMeeting!.url)}
+          >
+            <Video size={16} /> Join {event.onlineMeeting.service} meeting
+          </button>
+        </div>
+      )}
+
       {event.myAnswer && (
         <div className="event-section">
           <div className="event-label">Your answer</div>
+          {event.recurrenceId && (
+            <div className="event-scope" role="radiogroup" aria-label="Answer for">
+              <button role="radio" aria-checked={!onlyThis} onClick={() => setOnlyThis(false)}>
+                All occurrences
+              </button>
+              <button role="radio" aria-checked={onlyThis} onClick={() => setOnlyThis(true)}>
+                Only {formatDate(event.start, { weekday: 'short' })}
+              </button>
+            </div>
+          )}
           <div className="event-rsvp" role="radiogroup" aria-label="Your answer">
             {CHOICES.map((c) => (
               <button

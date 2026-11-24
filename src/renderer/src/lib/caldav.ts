@@ -54,6 +54,33 @@ export interface CalendarEvent {
   reminders: number[]
   /** The Talk conversation the event links to, on the same server */
   talkToken?: string
+  /** A meeting elsewhere: Microsoft Teams, Zoom, Google Meet or Webex */
+  onlineMeeting?: OnlineMeeting
+}
+
+export interface OnlineMeeting {
+  url: string
+  /** "Microsoft Teams", "Zoom", … */
+  service: string
+}
+
+const MEETING_SERVICES: [RegExp, string][] = [
+  [/https:\/\/teams\.(?:microsoft|live)\.com\/[^\s<>"]+/i, 'Microsoft Teams'],
+  [/https:\/\/[\w.-]*zoom\.us\/(?:j|my|w)\/[^\s<>"]+/i, 'Zoom'],
+  [/https:\/\/meet\.google\.com\/[a-z0-9-]+/i, 'Google Meet'],
+  [/https:\/\/[\w.-]+\.webex\.com\/[^\s<>"]+/i, 'Webex']
+]
+
+/** The link to join a Teams, Zoom, Meet or Webex meeting, from the event's own fields */
+export function onlineMeetingIn(...texts: (string | undefined)[]): OnlineMeeting | undefined {
+  for (const text of texts) {
+    if (!text) continue
+    for (const [pattern, service] of MEETING_SERVICES) {
+      const url = pattern.exec(text)?.[0]?.replace(/[.,;:!?)\]'>]+$/, '')
+      if (url) return { url, service }
+    }
+  }
+  return undefined
 }
 
 /** Calendars that hold events, in the order the user arranged them in Nextcloud. */
@@ -172,7 +199,13 @@ export function parseEvents(xml: string, ctx: ParseContext): CalendarEvent[] {
         talkToken:
           talkTokenIn(location, ctx.serverUrl) ??
           talkTokenIn(url, ctx.serverUrl) ??
-          talkTokenIn(description, ctx.serverUrl)
+          talkTokenIn(description, ctx.serverUrl),
+        onlineMeeting: onlineMeetingIn(
+          vevent.getFirstPropertyValue('x-microsoft-skypeteamsmeetingurl')?.toString(),
+          location,
+          url,
+          description
+        )
       })
     }
   }

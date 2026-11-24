@@ -109,6 +109,16 @@ export interface MeetingEvent {
   roomToken?: string
 }
 
+export interface MailAccount {
+  id: number
+  emailAddress: string
+}
+
+export interface MailMailbox {
+  databaseId: number
+  specialRole?: string | null
+}
+
 export interface LinkReference {
   richObjectType: string
   openGraphObject?: {
@@ -403,6 +413,46 @@ export function talk(accountId: string) {
         referenceId,
         talkMetaData: JSON.stringify(talkMetaData)
       }),
+
+    // Nextcloud Mail (its web API), for invitations that arrive by mail
+    mailAccounts: () => get<MailAccount[]>('/index.php/apps/mail/api/accounts'),
+    mailMailboxes: (mailAccountId: number) =>
+      get<{ mailboxes: MailMailbox[] }>('/index.php/apps/mail/api/mailboxes', {
+        query: { accountId: mailAccountId }
+      }),
+    /**
+     * Brings Mail's copy of a mailbox up to date with the mail server, as Nextcloud Mail does while it
+     * is open (it lists only what it has copied). `init` for a mailbox it hasn't copied yet (412).
+     * Nothing is marked read.
+     */
+    mailSync: (mailboxId: number, init = false) =>
+      raw<unknown>(accountId, 'POST', `/index.php/apps/mail/api/mailboxes/${mailboxId}/sync`, {
+        body: { init },
+        timeoutMs: 120_000
+      }),
+    /**
+     * Messages one by one (not by thread) since a time, newest first unless the user has Mail sort
+     * the oldest first; continue after the last with its dateInt as `cursor`. Listing also makes Mail
+     * recognise invitations. Nothing is marked read.
+     */
+    mailMessages: (mailboxId: number, opts: { limit: number; since: number; cursor?: number }) =>
+      get<{ databaseId: number; imipMessage?: boolean; dateInt?: number }[]>(
+        '/index.php/apps/mail/api/messages',
+        {
+          query: {
+            mailboxId,
+            limit: opts.limit,
+            view: 'singleton',
+            filter: `start:${opts.since}`,
+            cursor: opts.cursor
+          }
+        }
+      ),
+    /** A message's invitations (iCalendar with their method); reading them doesn't mark the mail read */
+    mailScheduling: (messageId: number) =>
+      get<{ scheduling?: { method: string; contents: string }[] }>(
+        `/index.php/apps/mail/api/messages/${messageId}/body`
+      ),
 
     // Users & search
     /** Nextcloud's preview of a link: its page's title, description and image (Talk on the web shows the same) */

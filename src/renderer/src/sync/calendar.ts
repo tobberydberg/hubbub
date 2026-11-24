@@ -5,7 +5,7 @@ import {
   type CalendarEvent,
   type CalendarInfo
 } from '@renderer/lib/caldav'
-import { addDays, viewRange } from '@renderer/lib/calendar-time'
+import { addDays, startOfDay, viewRange } from '@renderer/lib/calendar-time'
 import { setApp, useApp } from '@renderer/store/app'
 import { updateCalendars, useCalendar, type EventSet } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
@@ -30,20 +30,29 @@ function context(accountId: string, calendarHref: string): Parameters<typeof par
   }
 }
 
+type SetName = 'view' | 'upcoming' | 'invitations'
+
 async function fetchEvents(
   accountId: string,
   calendar: CalendarInfo,
   start: number,
-  end: number
+  end: number,
+  unanswered = false
 ): Promise<CalendarEvent[]> {
-  const xml = await window.hubbub.calendarEvents(accountId, calendar.href, utcStamp(start), utcStamp(end))
+  const xml = await window.hubbub.calendarEvents(
+    accountId,
+    calendar.href,
+    utcStamp(start),
+    utcStamp(end),
+    unanswered
+  )
   return parseEvents(xml, context(accountId, calendar.href)).filter((e) => e.status !== 'CANCELLED')
 }
 
 /** Fetches a range for the given calendars (all when omitted), keeping the others as they are. */
 async function fill(
   accountId: string,
-  which: 'view' | 'upcoming',
+  which: SetName,
   start: number,
   end: number,
   only?: CalendarInfo[]
@@ -52,7 +61,7 @@ async function fill(
   const results = await Promise.all(
     calendars.map(async (c) => {
       try {
-        return [c, await fetchEvents(accountId, c, start, end)] as const
+        return [c, await fetchEvents(accountId, c, start, end, which === 'invitations')] as const
       } catch {
         return [c, null] as const
       }
@@ -97,6 +106,29 @@ const upcomingRange = (): [number, number] => {
   return [start, start + UPCOMING_HOURS * 3_600_000]
 }
 
+const INVITATION_DAYS = 90
+
+const invitationRange = (): [number, number] => {
+  const today = startOfDay(Date.now())
+  return [today, addDays(today, INVITATION_DAYS)]
+}
+
+/**
+ * Invitations the user hasn't answered, from today on: each event once (its next occurrence),
+ * whichever calendar it is in, even a hidden one, since they wait for an answer.
+ */
+export function openInvitations(accountId: string): CalendarEvent[] {
+  const set = useCalendar.getState().accounts[accountId]?.invitations
+  if (!set) return []
+  const now = Date.now()
+  const seen = new Set<string>()
+  return Object.values(set.byCalendar)
+    .flat()
+    .filter((e) => e.myAnswer === 'NEEDS-ACTION' && e.end > now)
+    .sort((a, b) => a.start - b.start)
+    .filter((e) => (seen.has(e.uid) ? false : (seen.add(e.uid), true)))
+}
+
 /** Brings one server's calendars up to date for the date and view on screen. */
 export async function refreshCalendars(accountId: string, force = false): Promise<void> {
   const calendars = await loadCalendarList(accountId)
@@ -105,7 +137,10 @@ export async function refreshCalendars(accountId: string, force = false): Promis
   const a = state.accounts[accountId]
   const showing = calendarShown(accountId)
 
-  const sets: ['view' | 'upcoming', number, number][] = [['upcoming', ...upcomingRange()]]
+  const sets: [SetName, number, number][] = [
+    ['upcoming', ...upcomingRange()],
+    ['invitations', ...invitationRange()]
+  ]
   if (showing) {
     const { start, end } = viewRange(usePrefs.getState().calendarView, state.date)
     sets.push(['view', start, end])

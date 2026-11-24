@@ -20,7 +20,9 @@ const api: HubbubApi = {
   abortRequest: (requestId) => invoke('ocs:abort', requestId),
   upload: (req) => invoke('dav:upload', req),
   calendars: (accountId) => invoke('dav:calendars', accountId),
-  calendarEvents: (accountId, href, start, end) => invoke('dav:events', accountId, href, start, end),
+  calendarEvents: (accountId, href, start, end, unanswered) =>
+    invoke('dav:events', accountId, href, start, end, unanswered),
+  calendarFindByUid: (accountId, calendarHref, uid) => invoke('dav:findByUid', accountId, calendarHref, uid),
   calendarObject: (accountId, req) => invoke('dav:object', accountId, req),
   calendarAddresses: (accountId, userId) => invoke('dav:addresses', accountId, userId),
   app: {

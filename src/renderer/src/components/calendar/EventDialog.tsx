@@ -57,6 +57,14 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
   const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)
   const talkSupported = useApp((s) => hasFeature(s.accounts[accountId], 'conversation-v4'))
   const writable = useMemo(() => (calendars ?? []).filter((c) => c.writable), [calendars])
+  // An event moves only between the user's own calendars
+  const choices = useMemo(() => {
+    if (!existing) return writable
+    const own = writable.filter((c) => !c.sharedBy)
+    return own.some((c) => c.href === existing.calendarHref)
+      ? own
+      : writable.filter((c) => c.href === existing.calendarHref)
+  }, [writable, existing])
 
   const initial = existing
     ? { start: existing.start, end: existing.allDay ? addDays(existing.end, -1) : existing.end }
@@ -258,10 +266,10 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
         <select
           className="input"
           value={calendarHref}
-          disabled={!!existing}
+          disabled={choices.length < 2}
           onChange={(e) => setCalendarHref(e.target.value)}
         >
-          {writable.map((c) => (
+          {choices.map((c) => (
             <option key={c.href} value={c.href}>
               {c.name}
               {c.sharedBy ? ` (${c.sharedBy})` : ''}

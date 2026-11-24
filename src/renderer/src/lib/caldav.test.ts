@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCalendarList, parseEvents, talkTokenIn, utcStamp } from './caldav'
+import { onlineMeetingIn, parseCalendarList, parseEvents, talkTokenIn, utcStamp } from './caldav'
 
 // Shaped like Nextcloud's responses (from a Nextcloud 31 test server)
 const list = `<?xml version="1.0"?>
@@ -155,6 +155,24 @@ describe('helpers', () => {
     expect(
       talkTokenIn('https://other.example.com/index.php/call/abc123', 'https://cloud.example.com')
     ).toBeUndefined()
+  })
+
+  it('finds the link to join a Teams, Zoom or Meet meeting', () => {
+    expect(
+      onlineMeetingIn(
+        undefined,
+        'Microsoft Teams Meeting',
+        'Join: https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0.'
+      )
+    ).toEqual({
+      url: 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0',
+      service: 'Microsoft Teams'
+    })
+    expect(onlineMeetingIn('https://us02web.zoom.us/j/123456?pwd=x')?.service).toBe('Zoom')
+    expect(onlineMeetingIn('meet.google.com/abc', 'https://meet.google.com/abc-defg-hij')?.url).toBe(
+      'https://meet.google.com/abc-defg-hij'
+    )
+    expect(onlineMeetingIn('Room 3', 'https://example.com')).toBeUndefined()
   })
 
   it('writes CalDAV time stamps', () => {

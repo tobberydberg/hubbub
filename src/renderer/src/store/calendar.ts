@@ -21,6 +21,8 @@ export interface AccountCalendars {
   view: EventSet | null
   /** From now until tomorrow, for the next-meeting strip and reminders */
   upcoming: EventSet | null
+  /** The coming 90 days' events with someone who hasn't answered, for the open invitations */
+  invitations: EventSet | null
   loading: boolean
 }
 
@@ -38,6 +40,7 @@ export const emptyCalendars = (): AccountCalendars => ({
   calendars: null,
   view: null,
   upcoming: null,
+  invitations: null,
   loading: false
 })
 

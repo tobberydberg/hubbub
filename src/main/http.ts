@@ -222,12 +222,26 @@ export interface DavObject {
 export async function davObject(
   creds: Credentials,
   userId: string,
-  req: { method: 'GET' | 'PUT' | 'DELETE'; href: string; body?: string; etag?: string | null }
+  req: {
+    method: 'GET' | 'PUT' | 'DELETE' | 'MOVE'
+    href: string
+    body?: string
+    etag?: string | null
+    /** MOVE: the calendar the event goes to */
+    destination?: string
+  }
 ): Promise<DavObject> {
   const url = calendarUrl(creds, userId, req.href)
   if (!url.endsWith('.ics')) throw new Error('Not an event')
   const headers: Record<string, string> = { ...authHeaders(creds) }
-  if (req.method === 'PUT') {
+  if (req.method === 'MOVE') {
+    // Into another of the user's calendars under the same name. Nextcloud moves it as it is, without
+    // telling the organizer or the invited people anything.
+    const target = calendarUrl(creds, userId, req.destination ?? '')
+    headers.Destination = `${target.replace(/\/?$/, '/')}${url.split('/').pop()}`
+    headers.Overwrite = 'F'
+    if (req.etag) headers['If-Match'] = req.etag
+  } else if (req.method === 'PUT') {
     headers['Content-Type'] = 'text/calendar; charset=utf-8'
     if (req.etag) headers['If-Match'] = req.etag
     else headers['If-None-Match'] = '*'
@@ -256,6 +270,32 @@ export async function davPrincipalAddresses(creds: Credentials, otherUserId: str
   return [...xml.matchAll(/<(?:[\w-]+:)?href>(mailto:[^<]+)<\/(?:[\w-]+:)?href>/gi)].map((m) => m[1])
 }
 
+/** The path and ETag of the event with this UID in one of the user's calendars, or null */
+export async function davFindByUid(
+  creds: Credentials,
+  userId: string,
+  calendarHref: string,
+  uid: string
+): Promise<{ href: string; etag: string | null } | null> {
+  const url = calendarUrl(creds, userId, calendarHref)
+  const escaped = uid.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  const res = await accountSession(creds.id).fetch(url, {
+    method: 'REPORT',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: `<?xml version="1.0"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:getetag/></d:prop>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:prop-filter name="UID"><c:text-match collation="i;octet">${escaped}</c:text-match></c:prop-filter></c:comp-filter></c:comp-filter></c:filter>
+</c:calendar-query>`
+  })
+  if (!res.ok && res.status !== 207) return null
+  const xml = await res.text()
+  const href = /<(?:[\w-]+:)?href>([^<]+\.ics)<\/(?:[\w-]+:)?href>/.exec(xml)?.[1]
+  if (!href) return null
+  const etag = /<(?:[\w-]+:)?getetag>([^<]+)</.exec(xml)?.[1]?.replace(/&quot;/g, '"') ?? null
+  return { href, etag }
+}
+
 const UTC_STAMP = /^\d{8}T\d{6}Z$/
 
 /**
@@ -268,7 +308,9 @@ export async function davEvents(
   userId: string,
   href: string,
   start: string,
-  end: string
+  end: string,
+  /** Only events with someone who hasn't answered (for the list of open invitations) */
+  unanswered = false
 ): Promise<string> {
   const url = calendarUrl(creds, userId, href)
   if (!UTC_STAMP.test(start) || !UTC_STAMP.test(end)) throw new Error('Invalid time range')
@@ -279,7 +321,7 @@ export async function davEvents(
     body: `<?xml version="1.0"?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:prop><d:getetag/><c:calendar-data><c:expand ${range}/></c:calendar-data></d:prop>
-  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range ${range}/></c:comp-filter></c:comp-filter></c:filter>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range ${range}/>${unanswered ? '<c:prop-filter name="ATTENDEE"><c:param-filter name="PARTSTAT"><c:text-match>NEEDS-ACTION</c:text-match></c:param-filter></c:prop-filter>' : ''}</c:comp-filter></c:comp-filter></c:filter>
 </c:calendar-query>`
   })
   if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
