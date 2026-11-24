@@ -24,18 +24,37 @@
   meeting time; past meetings tidy themselves away. You can mark other conversations as meetings too.
 - **Group messages.** Direct messages with several people, listed under Direct Messages like in Mattermost
   (Talk's own way of adding people to a one-to-one conversation, so they work in Talk too).
+- **Typing indicators.** "Alice is typing…" under the message box, in both directions with Talk on the web
+  (when typing privacy in Talk's settings is public, and the server has the High-Performance Backend).
+- **Slash commands.** Type `/` for the list: `/away`, `/dnd`, `/status`, `/msg @someone`, `/call`, `/invite`,
+  `/join`, `/leave`, `/mute`, `/me`, `/shrug`, `/code`, `/search` and more. Unknown commands are sent as
+  messages, so Talk bots still get them; start with `//` to send a message beginning with `/`.
 - **Chat.** Markdown, code blocks, tables, @mentions with autocomplete, emoji reactions, quote replies,
-  editing (↑ edits your last message) and deleting.
+  editing (↑ edits your last message) and deleting. Read receipts (✓ sent, ✓✓ read by everyone) when the
+  server shares read status.
+- **Polls.** Create one from the message box or with `/poll`, with single or multiple answers and optionally
+  hidden results; vote, change your vote and end it right in the conversation.
+- **Pinned messages.** Pin a message for a while or until unpinned; it shows in a bar at the top of the
+  conversation, which you can hide for yourself.
+- **Remind me later** on any message, with a desktop notification when it's time and a list of upcoming
+  reminders in the account menu.
+- **Send later and silently.** The arrow next to Send schedules a message or sends it without notifying
+  anyone. Scheduled messages can be sent now, moved or deleted.
+- **Schedule a meeting** for a conversation into your Nextcloud calendar, inviting everyone in it; the Info
+  panel shows the conversation's meetings this week.
+- **Important and sensitive conversations.** Important ones notify you even on Do not disturb; sensitive
+  ones hide the message text in notifications.
+- **Resizable side panel** for threads, members, info and search (double-click the edge to reset).
 - **Files.** Upload with the paperclip, drag and drop, or paste. Images show inline previews.
 - **Find anything.** <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> jumps to any conversation or person on any server, with
   Unread and Meetings filters; the search bar searches messages.
 - **Mark as unread** from any message (or <kbd>Alt</kbd>+click), and drafts are kept across restarts.
 - **Calls.** Start or join an audio or video call from any conversation, or call several people at once
-  from the + menu. Share your entire screen or a single window, raise your hand, send reactions and add people
-  to a running call. A call widget in the sidebar shows who is talking; the call view shows everyone in a grid
-  or the speaker large, and can pop out into its own window so you can keep chatting in the main one. Incoming
-  calls ring within seconds, with Join and Decline. Works together with Talk on the web and on phones. Needs a
-  server with the High-Performance Backend; other calls open in the browser.
+  from the + menu. Share your entire screen or a single window, blur your background, raise your hand, send
+  reactions and add people to a running call. A call widget in the sidebar shows who is talking; the call view
+  shows everyone in a grid or the speaker large, and can pop out into its own window so you can keep chatting
+  in the main one. Incoming calls ring within seconds, with Join and Decline. Works together with Talk on the
+  web and on phones. Needs a server with the High-Performance Backend; other calls open in the browser.
 - **Notifications.** Desktop notifications for direct messages and mentions, which respect each
   conversation's notification level, plus dock/taskbar badges.
 - **Themes.** Denim, Sapphire, Quartz, Indigo and Onyx, or follow the system's light/dark setting.
@@ -109,8 +128,7 @@ _Personal settings → Security → Devices & sessions_).
 
 - **Calls without the High-Performance Backend**, end-to-end encrypted calls and calls in federated
   conversations open in your browser.
-- Polls, voice messages and shared locations are shown as links or files, not as rich widgets.
-- Typing indicators and read receipts.
+- Voice messages and shared locations are shown as links or files, not as rich widgets.
 
 ## Development
 

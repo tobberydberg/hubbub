@@ -54,18 +54,76 @@ async function call<T>(
   return res.data as T
 }
 
+export interface ChatReminder {
+  messageId: number
+  timestamp: number
+  token: string
+}
+
+export interface UpcomingReminder {
+  reminderTimestamp: number
+  roomToken: string
+  messageId: number
+  actorDisplayName: string
+  message: string
+  messageParameters: Record<string, { type: string; name: string }> | []
+}
+
+export interface ScheduledMessage {
+  id: string | number
+  message: string
+  sendAt: number
+  silent?: boolean
+  threadId?: number
+  threadTitle?: string
+  parent?: ChatMessage
+}
+
+export interface Poll {
+  id: number
+  question: string
+  options: string[]
+  /** 0 open, 1 closed, 2 draft */
+  status: number
+  /** 0 public results, 1 hidden until closed */
+  resultMode: number
+  /** 0 is unlimited */
+  maxVotes: number
+  actorType: string
+  actorId: string
+  actorDisplayName: string
+  /** Votes per option ("option-0": 3), when the results are visible */
+  votes?: Record<string, number>
+  numVoters?: number
+  votedSelf?: number[]
+  details?: { actorDisplayName: string; actorId: string; actorType: string; optionId: number }[]
+}
+
+export interface MeetingEvent {
+  eventName: string
+  start: number
+  end: number
+  eventLink?: string
+  calendars?: { calendarName: string; calendarColor?: string }[]
+  /** Set in dashboard events */
+  roomToken?: string
+}
+
 export interface ServerNotification {
   notification_id: number
   app: string
   object_type: string
   object_id: string
   subject: string
+  message?: string
 }
 
 export interface MessagesPage {
   messages: ChatMessage[]
   lastGiven: number | null
   notModified: boolean
+  /** Last message read by everyone (read receipts) */
+  lastCommonRead: number | null
 }
 
 export interface SendOptions {
@@ -102,6 +160,10 @@ export function talk(accountId: string) {
     room: (token: string) => get<Room>(`${SPREED}/v4/room/${token}`),
     setFavorite: (token: string, favorite: boolean) =>
       favorite ? post(`${SPREED}/v4/room/${token}/favorite`) : del(`${SPREED}/v4/room/${token}/favorite`),
+    setImportant: (token: string, on: boolean) =>
+      on ? post(`${SPREED}/v4/room/${token}/important`) : del(`${SPREED}/v4/room/${token}/important`),
+    setSensitive: (token: string, on: boolean) =>
+      on ? post(`${SPREED}/v4/room/${token}/sensitive`) : del(`${SPREED}/v4/room/${token}/sensitive`),
     setNotificationLevel: (token: string, level: number) =>
       post(`${SPREED}/v4/room/${token}/notify`, { level }),
     leave: (token: string) => del(`${SPREED}/v4/room/${token}/participants/self`),
@@ -153,6 +215,8 @@ export function talk(accountId: string) {
         { body: { force } }
       ),
     leaveSession: (token: string) => del(`${SPREED}/v4/room/${token}/participants/active`),
+    removeAttendee: (token: string, attendeeId: number) =>
+      del(`${SPREED}/v4/room/${token}/attendees`, { attendeeId }),
     addParticipant: (token: string, userId: string) =>
       post(`${SPREED}/v4/room/${token}/participants`, { newParticipant: userId, source: 'users' }),
     /** Rings a conversation member who isn't in the call (moderators, send-call-notification) */
@@ -191,7 +255,13 @@ export function talk(accountId: string) {
       })
       if (!res.ok) throw new TalkError(res.error || `HTTP ${res.status}`, res.status)
       const lastGiven = res.headers['x-chat-last-given'] ? Number(res.headers['x-chat-last-given']) : null
-      return { messages: res.data ?? [], lastGiven, notModified: res.status === 304 }
+      const common = res.headers['x-chat-last-common-read']
+      return {
+        messages: res.data ?? [],
+        lastGiven,
+        notModified: res.status === 304,
+        lastCommonRead: common ? Number(common) : null
+      }
     },
     context: (token: string, messageId: number, limit = 50) =>
       get<ChatMessage[]>(`${SPREED}/v1/chat/${token}/${messageId}/context`, { query: { limit } }),
@@ -203,6 +273,66 @@ export function talk(accountId: string) {
     markRead: (token: string, lastReadMessage: number) =>
       post<Room | []>(`${SPREED}/v1/chat/${token}/read`, { lastReadMessage }),
     markUnread: (token: string) => del<Room | []>(`${SPREED}/v1/chat/${token}/read`),
+    // Reminders (remind-me-later)
+    setReminder: (token: string, id: number, timestamp: number) =>
+      post(`${SPREED}/v1/chat/${token}/${id}/reminder`, { timestamp }),
+    reminder: async (token: string, id: number): Promise<ChatReminder | null> => {
+      const res = await raw<ChatReminder>(accountId, 'GET', `${SPREED}/v1/chat/${token}/${id}/reminder`)
+      return res.ok ? res.data : null
+    },
+    deleteReminder: (token: string, id: number) => del(`${SPREED}/v1/chat/${token}/${id}/reminder`),
+    upcomingReminders: () => get<UpcomingReminder[]>(`${SPREED}/v1/chat/upcoming-reminders`),
+
+    // Pinned messages
+    pin: (token: string, id: number, pinUntil?: number) =>
+      post(`${SPREED}/v1/chat/${token}/${id}/pin`, pinUntil ? { pinUntil } : {}),
+    unpin: (token: string, id: number) => del(`${SPREED}/v1/chat/${token}/${id}/pin`),
+    hidePin: (token: string, id: number) => del(`${SPREED}/v1/chat/${token}/${id}/pin/self`),
+
+    // Scheduled messages
+    scheduled: (token: string) => get<ScheduledMessage[]>(`${SPREED}/v1/chat/${token}/schedule`),
+    schedule: (
+      token: string,
+      body: {
+        message: string
+        sendAt: number
+        replyTo?: number
+        threadId?: number
+        threadTitle?: string
+        silent?: boolean
+      }
+    ) => post<ScheduledMessage>(`${SPREED}/v1/chat/${token}/schedule`, body),
+    reschedule: (token: string, id: string | number, body: { message: string; sendAt: number }) =>
+      post<ScheduledMessage>(`${SPREED}/v1/chat/${token}/schedule/${id}`, body),
+    unschedule: (token: string, id: string | number) => del(`${SPREED}/v1/chat/${token}/schedule/${id}`),
+
+    // Polls
+    poll: (token: string, id: number | string) => get<Poll>(`${SPREED}/v1/poll/${token}/${id}`),
+    createPoll: (
+      token: string,
+      body: { question: string; options: string[]; resultMode: number; maxVotes: number; threadId?: number }
+    ) => post<Poll>(`${SPREED}/v1/poll/${token}`, body),
+    vote: (token: string, id: number | string, optionIds: number[]) =>
+      post<Poll>(`${SPREED}/v1/poll/${token}/${id}`, { optionIds }),
+    closePoll: (token: string, id: number | string) => del<Poll>(`${SPREED}/v1/poll/${token}/${id}`),
+
+    // Meetings
+    scheduleMeeting: (
+      token: string,
+      body: {
+        calendarUri: string
+        start: number
+        end?: number
+        title?: string
+        description?: string
+        attendeeIds?: number[] | null
+      }
+    ) => post(`${SPREED}/v4/room/${token}/meeting`, body),
+    /** Events in the next 7 days shared with the other person of a 1:1 conversation */
+    mutualEvents: (token: string) => get<MeetingEvent[]>(`${SPREED}/v4/room/${token}/mutual-events`),
+    /** Our events in the next 7 days that belong to a conversation */
+    dashboardEvents: () => get<MeetingEvent[]>(`${SPREED}/v4/dashboard/events`),
+
     react: (token: string, id: number, reaction: string) =>
       post(`${SPREED}/v1/reaction/${token}/${id}`, { reaction }),
     unreact: (token: string, id: number, reaction: string) =>
@@ -273,7 +403,10 @@ export function talk(accountId: string) {
       }),
     userStatus: () => get<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status'),
     setUserStatus: (statusType: string) =>
-      put<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status/status', { statusType })
+      put<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status/status', { statusType }),
+    setStatusMessage: (message: string) =>
+      put('/ocs/v2.php/apps/user_status/api/v1/user_status/message/custom', { message }),
+    clearStatusMessage: () => del('/ocs/v2.php/apps/user_status/api/v1/user_status/message')
   }
 }
 

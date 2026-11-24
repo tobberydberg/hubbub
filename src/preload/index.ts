@@ -19,6 +19,7 @@ const api: HubbubApi = {
   ocs: (req) => invoke('ocs:request', req),
   abortRequest: (requestId) => invoke('ocs:abort', requestId),
   upload: (req) => invoke('dav:upload', req),
+  calendars: (accountId) => invoke('dav:calendars', accountId),
   app: {
     version: () => invoke('app:version'),
     openExternal: (url) => invoke('app:openExternal', url),

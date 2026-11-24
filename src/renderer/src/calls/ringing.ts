@@ -21,7 +21,7 @@ export function detectIncomingCalls(prev: AccountState, rooms: Room[]): void {
       continue
     }
     if (!shouldRing(before, room, prev.user?.id) || isInCall(accountId, room.token)) continue
-    if (!usePrefs.getState().ringForCalls || prev.userStatus === 'dnd') continue
+    if (!usePrefs.getState().ringForCalls || (prev.userStatus === 'dnd' && !room.isImportant)) continue
     const last = Array.isArray(room.lastMessage) ? undefined : room.lastMessage
     const caller = last?.systemMessage === 'call_started' ? last.actorDisplayName : ''
     ring(prev, room, caller || (room.type === RoomType.OneToOne ? room.displayName : ''))

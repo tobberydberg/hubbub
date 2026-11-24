@@ -118,6 +118,16 @@ export async function loadThread(accountId: string, token: string, threadId: num
   }
 }
 
+/** Read receipts: the last message everyone has read only moves forward. */
+function setLastCommonRead(accountId: string, token: string, id: number): void {
+  const room = useApp.getState().accounts[accountId]?.rooms[token]
+  if (!room || (room.lastCommonReadMessage ?? 0) >= id) return
+  setApp((s) => {
+    const r = s.accounts[accountId]?.rooms[token]
+    if (r) r.lastCommonReadMessage = id
+  })
+}
+
 /** Fetches everything newer than what is loaded, without waiting for new messages. */
 export async function catchUp(accountId: string, token: string): Promise<void> {
   const key = chatKey(accountId, token)
@@ -168,6 +178,7 @@ export class ChatPoller {
           requestId: this.requestId
         })
         if (this.stopped) break
+        if (page.lastCommonRead) setLastCommonRead(this.accountId, this.token, page.lastCommonRead)
         if (!page.notModified && page.messages.length) {
           const added = applyMessages(key, page.messages)
           since = Math.max(since, page.lastGiven ?? 0, ...page.messages.map((m) => m.id))

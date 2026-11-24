@@ -3,6 +3,7 @@ import { Bell, Info, LayoutList, Monitor, Palette, Phone, SlidersHorizontal } fr
 import type { DesktopSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
 import { useApp } from '@renderer/store/app'
+import { setBackgroundBlur } from '@renderer/calls/call'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { Modal, Toggle } from '../common/Modal'
 
@@ -307,6 +308,12 @@ function CallsTab() {
         {select(prefs.microphoneId, inputs, (id) => prefs.set({ microphoneId: id }))}
       </Row>
       <Row title="Camera">{select(prefs.cameraId, cameras, (id) => prefs.set({ cameraId: id }))}</Row>
+      <Row
+        title="Blur my background"
+        sub="Others see you sharp and your surroundings blurred. Done on this computer; also in the call controls."
+      >
+        <Toggle on={prefs.backgroundBlur} onChange={(v) => void setBackgroundBlur(v)} />
+      </Row>
       <Row title="Speaker">{select(prefs.speakerId, outputs, (id) => prefs.set({ speakerId: id }))}</Row>
       {unnamed && (
         <p className="help" style={{ fontSize: 12 }}>

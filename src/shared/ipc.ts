@@ -142,6 +142,8 @@ export interface HubbubApi {
   abortRequest(requestId: string): Promise<void>
   /** Uploads without overwriting: on a name clash a suffix like " (1)" is added. Returns the final path. */
   upload(req: UploadRequest): Promise<UploadResult>
+  /** The user's calendars, as the raw CalDAV response */
+  calendars(accountId: string): Promise<string>
   app: {
     version(): Promise<string>
     openExternal(url: string): Promise<void>

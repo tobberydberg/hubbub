@@ -96,6 +96,13 @@ export class HpbSignaling {
     await this.request('room', this.room)
   }
 
+  /** Leaves the conversation on the signaling server; the connection stays open for the next one. */
+  leaveRoom(): void {
+    if (!this.room) return
+    this.room = null
+    this.send('room', { roomid: '', sessionid: '' })
+  }
+
   sendToSession(sessionId: string, data: SignalData): void {
     this.send('message', { recipient: { type: 'session', sessionid: sessionId }, data })
   }

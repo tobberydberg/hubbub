@@ -3,3 +3,7 @@ Copyright 2026 Tobias Rydberg
 
 This product includes software developed by Tobias Rydberg and the Hubbub contributors
 (https://github.com/tobberydberg/hubbub).
+
+Background blur in calls uses MediaPipe (@mediapipe/tasks-vision) and its selfie segmentation model
+(src/renderer/src/assets/selfie_segmenter_landscape.tflite), Copyright Google LLC, licensed under the
+Apache License, Version 2.0 (https://github.com/google-ai-edge/mediapipe).

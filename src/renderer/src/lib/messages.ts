@@ -120,18 +120,25 @@ export interface RenderableMessage {
   files: RichObjectParameter[]
   /** Whether the current user (or everyone) is mentioned */
   mentionsSelf: boolean
+  /** A Talk poll shared into the chat */
+  poll?: { id: string; name: string }
 }
 
 export function toRenderable(m: ChatMessage, selfId: string | undefined): RenderableMessage {
   const p = params(m)
   const files: RichObjectParameter[] = []
   let mentionsSelf = false
+  let poll: RenderableMessage['poll']
 
   const markdown = m.message.replace(PLACEHOLDER, (whole, key: string) => {
     const param = p[key]
     if (!param) return whole
     if (param.type === 'file') {
       files.push(param)
+      return ''
+    }
+    if (param.type === 'talk-poll') {
+      poll = { id: param.id, name: param.name }
       return ''
     }
     if (MENTION_TYPES.has(param.type)) {
@@ -149,7 +156,7 @@ export function toRenderable(m: ChatMessage, selfId: string | undefined): Render
     if (param.type === 'file' && !files.includes(param)) files.push(param)
   }
 
-  return { markdown: markdown.trim(), files, mentionsSelf }
+  return { markdown: markdown.trim(), files, mentionsSelf, poll }
 }
 
 /** Plain text rendering for notifications, previews and system messages. */
@@ -269,7 +276,8 @@ export function colorFor(key: string): string {
 /** Converts a message back to the text a user would type, e.g. for editing. Returns null if not editable. */
 export function toEditableText(m: ChatMessage): string | null {
   const p = params(m)
-  if (Object.values(p).some((x) => x.type === 'file')) return null
+  // Files and polls can't be edited
+  if (Object.values(p).some((x) => x.type === 'file' || x.type === 'talk-poll')) return null
   return m.message.replace(PLACEHOLDER, (whole, key: string) => {
     const param = p[key]
     if (!param) return whole

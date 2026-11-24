@@ -27,6 +27,9 @@ import { RoomIcon } from '../sidebar/Sidebar'
 import { CertificateDetails } from '../common/Certificate'
 import { AddServerModal } from './AddServerModal'
 import { SettingsModal } from './SettingsModal'
+import { fromLocalInput, toLocalInput } from '@renderer/lib/time'
+import { MeetingModal } from './MeetingModal'
+import { PollModal } from './PollModal'
 
 const close = (): void => setApp({ modal: null })
 
@@ -56,6 +59,12 @@ export function ModalHost() {
       return <ConfirmModal modal={modal} />
     case 'image':
       return <ImageViewer modal={modal} />
+    case 'pick-time':
+      return <PickTimeModal modal={modal} />
+    case 'poll':
+      return <PollModal modal={modal} />
+    case 'meeting':
+      return <MeetingModal modal={modal} />
   }
 }
 
@@ -583,6 +592,46 @@ function CategoryNameModal({ modal }: { modal: Extract<ModalState, { type: 'cate
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
       />
+    </Modal>
+  )
+}
+
+function PickTimeModal({ modal }: { modal: Extract<ModalState, { type: 'pick-time' }> }) {
+  const [value, setValue] = useState(toLocalInput(modal.initial))
+  const at = fromLocalInput(value)
+  const valid = at !== null && at > Date.now() / 1000
+  return (
+    <Modal
+      title={modal.title}
+      onClose={close}
+      size="small"
+      footer={
+        <>
+          <button className="btn btn-tertiary" onClick={close}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={!valid}
+            onClick={() => {
+              close()
+              if (at) modal.onPick(at)
+            }}
+          >
+            {modal.confirmLabel}
+          </button>
+        </>
+      }
+    >
+      <input
+        className="input"
+        type="datetime-local"
+        value={value}
+        min={toLocalInput(Date.now() / 1000)}
+        onChange={(e) => setValue(e.target.value)}
+        autoFocus
+      />
+      {at !== null && !valid && <p className="help">Pick a time in the future.</p>}
     </Modal>
   )
 }

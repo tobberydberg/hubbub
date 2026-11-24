@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Circle, Clock, MinusCircle, Plus, Search, Settings, EyeOff } from 'lucide-react'
-import { setApp, useActiveAccount } from '@renderer/store/app'
+import { AlarmClock, Circle, Clock, MinusCircle, Plus, Search, Settings, EyeOff } from 'lucide-react'
+import { hasFeature, setApp, useActiveAccount } from '@renderer/store/app'
 import { setUserStatus } from '@renderer/sync/actions'
 import { Avatar } from './common/Avatar'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, useMenuState } from './common/Menu'
@@ -108,6 +108,16 @@ export function GlobalHeader() {
             />
           ))}
           <MenuSeparator />
+          {hasFeature(account, 'remind-me-later') && (
+            <MenuItem
+              icon={<AlarmClock size={18} />}
+              label="Upcoming reminders"
+              onClick={() => {
+                menu.close()
+                setApp({ rhs: { type: 'reminders', accountId: account.info.id } })
+              }}
+            />
+          )}
           <MenuItem
             icon={<Settings size={18} />}
             label="Server settings…"

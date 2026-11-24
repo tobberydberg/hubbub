@@ -162,3 +162,26 @@ export async function davMkcol(creds: Credentials, userId: string, remotePath: s
       .catch(() => undefined)
   }
 }
+
+const CALENDARS_PROPFIND = `<?xml version="1.0"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">
+  <d:prop>
+    <d:displayname/>
+    <d:resourcetype/>
+    <d:current-user-privilege-set/>
+    <c:supported-calendar-component-set/>
+    <a:calendar-color/>
+  </d:prop>
+</d:propfind>`
+
+/** The user's calendars as CalDAV XML (PROPFIND, depth 1); read-only. */
+export async function davCalendars(creds: Credentials, userId: string): Promise<string> {
+  const url = `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/calendars/${encodeURIComponent(userId)}/`
+  const res = await accountSession(creds.id).fetch(url, {
+    method: 'PROPFIND',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: CALENDARS_PROPFIND
+  })
+  if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}

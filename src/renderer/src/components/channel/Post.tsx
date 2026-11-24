@@ -9,9 +9,16 @@ import {
   Pencil,
   Quote,
   SmilePlus,
-  Trash2
+  Trash2,
+  Check,
+  CheckCheck,
+  AlarmClock,
+  CalendarClock,
+  Pin,
+  PinOff,
+  X
 } from 'lucide-react'
-import { ParticipantType, type ChatMessage } from '@shared/talk-types'
+import { ParticipantType, RoomType, type ChatMessage } from '@shared/talk-types'
 import {
   formatFullDate,
   formatRelative,
@@ -25,7 +32,7 @@ import {
   toPlainText,
   toRenderable
 } from '@renderer/lib/messages'
-import { chatKey, setApp, useApp } from '@renderer/store/app'
+import { chatKey, hasFeature, setApp, useApp } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
 import { setThreadFollow, type ThreadEntry } from '@renderer/sync/threads'
 import {
@@ -39,10 +46,14 @@ import {
 } from '@renderer/sync/actions'
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
-import { anchorFrom, Menu, MenuItem, MenuSeparator, type Anchor } from '../common/Menu'
+import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 import { Attachments } from './Attachments'
 import { MessageText } from './MessageText'
+import { PollCard } from './PollCard'
 import { MessageEditor } from './Composer'
+import { pickTime, pinMessage, remindMe, removeReminder, unpinMessage } from '@renderer/sync/messaging'
+import { choiceHint, formatAt, laterChoices } from '@renderer/lib/time'
+import { talk } from '@renderer/api/talk'
 
 export interface PostProps {
   accountId: string
@@ -63,9 +74,18 @@ const isMac = window.hubbub.platform === 'darwin'
 const EDIT_WINDOW = 24 * 3600
 const DELETE_WINDOW = 6 * 3600
 
+const PIN_DURATIONS: [string, number | null][] = [
+  ['For 24 hours', 24 * 3600],
+  ['For 7 days', 7 * 24 * 3600],
+  ['For 30 days', 30 * 24 * 3600],
+  ['Until unpinned', null]
+]
+
 export const Post = memo(function Post(props: PostProps) {
   const { accountId, token, msg, selfId, continuation, inThread, thread } = props
   const [menu, setMenu] = useState<Anchor | null>(null)
+  const [submenu, setSubmenu] = useState<'remind' | 'pin' | null>(null)
+  const [reminder, setReminder] = useState<number | null>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
   const recent = usePrefs((s) => s.recentEmojis)
   const collapsed = usePrefs((s) => s.collapsedThreads)
@@ -75,8 +95,25 @@ export const Post = memo(function Post(props: PostProps) {
   const isSystem = !!msg.systemMessage
   const isDeleted = msg.messageType === 'comment_deleted'
   const isOwn = msg.actorType === 'users' && msg.actorId === selfId
+  // Read receipts on our own messages: read by everyone once the common read marker passes them
+  const readByAll = useApp(
+    (s) => isOwn && (s.accounts[accountId]?.rooms[token]?.lastCommonReadMessage ?? 0) >= msg.id
+  )
+  const receipts = useApp(
+    (s) =>
+      (s.accounts[accountId]?.caps?.config.chat as { 'read-privacy'?: number } | undefined)?.[
+        'read-privacy'
+      ] === 0
+  )
   const isModerator =
     props.participantType === ParticipantType.Owner || props.participantType === ParticipantType.Moderator
+  const lastPinnedId = useApp((s) => s.accounts[accountId]?.rooms[token]?.lastPinnedId)
+  const roomType = useApp((s) => s.accounts[accountId]?.rooms[token]?.type)
+  const pinsSupported = useApp((s) => hasFeature(s.accounts[accountId], 'pinned-messages'))
+  const remindersSupported = useApp((s) => hasFeature(s.accounts[accountId], 'remind-me-later'))
+  // Talk lets moderators pin; in a one-to-one conversation both people are
+  const canPin =
+    pinsSupported && (roomType === RoomType.OneToOne || roomType === RoomType.NoteToSelf || isModerator)
   const age = Date.now() / 1000 - msg.timestamp
   const editable =
     props.canEdit && isOwn && !isDeleted && !isSystem && age < EDIT_WINDOW && toEditableText(msg) !== null
@@ -101,7 +138,18 @@ export const Post = memo(function Post(props: PostProps) {
   const showFooter = !inThread && !!thread && thread.replyCount > 0
   const parent = isFullMessage(msg.parent) ? msg.parent : null
 
-  const close = (): void => setMenu(null)
+  const close = (): void => {
+    setMenu(null)
+    setSubmenu(null)
+  }
+  const pinned = !!msg.metaData?.pinnedAt || lastPinnedId === msg.id
+  const openRemind = (): void => {
+    setSubmenu('remind')
+    setReminder(null)
+    void talk(accountId)
+      .reminder(token, msg.id)
+      .then((r) => setReminder(r?.timestamp ?? null))
+  }
   const act = (fn: () => unknown) => (): void => {
     close()
     void fn()
@@ -133,7 +181,22 @@ export const Post = memo(function Post(props: PostProps) {
         {isThreadRoot(msg) && msg.threadTitle && !inThread && (
           <div className="thread-title">{msg.threadTitle}</div>
         )}
-        <MessageText markdown={r.markdown} plain={msg.markdown === false} className={jumbo ? 'jumbo' : ''} />
+        {r.markdown && (
+          <MessageText
+            markdown={r.markdown}
+            plain={msg.markdown === false}
+            className={jumbo ? 'jumbo' : ''}
+          />
+        )}
+        {r.poll && (
+          <PollCard
+            accountId={accountId}
+            token={token}
+            pollId={r.poll.id}
+            name={r.poll.name}
+            canClose={isModerator}
+          />
+        )}
         <Attachments accountId={accountId} files={r.files} />
       </>
     )
@@ -182,6 +245,18 @@ export const Post = memo(function Post(props: PostProps) {
             </span>
             {msg.actorType === 'bots' && <span className="post-tag">Bot</span>}
             {msg.actorType === 'guests' && <span className="post-tag">Guest</span>}
+            {pinned && (
+              <span
+                className="post-pinned"
+                title={
+                  msg.metaData?.pinnedActorDisplayName
+                    ? `Pinned by ${msg.metaData.pinnedActorDisplayName}`
+                    : 'Pinned'
+                }
+              >
+                <Pin size={12} /> Pinned
+              </span>
+            )}
             <span className="post-time" title={formatFullDate(msg.timestamp)}>
               {formatTime(msg.timestamp)}
             </span>
@@ -245,6 +320,14 @@ export const Post = memo(function Post(props: PostProps) {
             <FollowButton accountId={accountId} thread={thread} />
           </div>
         )}
+        {isOwn && receipts && !isDeleted && !inThread && (
+          <span
+            className={`post-receipt${readByAll ? ' read' : ''}`}
+            title={readByAll ? 'Read by everyone' : 'Sent'}
+          >
+            {readByAll ? <CheckCheck size={14} /> : <Check size={14} />}
+          </span>
+        )}
       </div>
 
       {!isDeleted && !editing && (
@@ -284,42 +367,116 @@ export const Post = memo(function Post(props: PostProps) {
 
       {menu && (
         <Menu anchor={menu} onClose={close}>
-          {!inThread && (
-            <MenuItem icon={<CornerUpLeft size={18} />} label="Reply in thread" onClick={act(reply)} />
-          )}
-          {msg.isReplyable !== false && !collapsed && (
-            <MenuItem icon={<Quote size={18} />} label="Quote reply" onClick={act(quoteReply)} />
-          )}
-          {!inThread && (
-            <MenuItem
-              icon={<MailWarning size={18} />}
-              label="Mark as unread"
-              hint={isMac ? '⌥ click' : 'Alt+click'}
-              onClick={act(() => markUnreadFrom(accountId, token, msg))}
-            />
-          )}
-          <MenuSeparator />
-          <MenuItem
-            icon={<Copy size={18} />}
-            label="Copy text"
-            onClick={act(() => copyText(toEditableText(msg) ?? toPlainText(msg)))}
-          />
-          <MenuItem
-            icon={<Link size={18} />}
-            label="Copy link"
-            onClick={act(() => copyText(messageLink(accountId, token, msg.id), 'Link copied to clipboard'))}
-          />
-          {(editable || deletable) && <MenuSeparator />}
-          {editable && (
-            <MenuItem icon={<Pencil size={18} />} label="Edit" onClick={act(startEdit)} hint="↑" />
-          )}
-          {deletable && (
-            <MenuItem
-              icon={<Trash2 size={18} />}
-              label="Delete"
-              danger
-              onClick={act(() => confirmDeleteMessage(accountId, token, msg))}
-            />
+          {submenu === 'remind' ? (
+            <>
+              <MenuTitle>Remind me</MenuTitle>
+              {laterChoices().map((c) => (
+                <MenuItem
+                  key={c.label}
+                  icon={<AlarmClock size={18} />}
+                  label={c.label}
+                  hint={choiceHint(c)}
+                  onClick={act(() => remindMe(accountId, token, msg.id, c.at))}
+                />
+              ))}
+              <MenuItem
+                icon={<CalendarClock size={18} />}
+                label="Custom…"
+                onClick={act(() =>
+                  pickTime(
+                    'Remind me',
+                    'Set reminder',
+                    laterChoices()[3].at,
+                    (at) => void remindMe(accountId, token, msg.id, at)
+                  )
+                )}
+              />
+              {reminder && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem
+                    icon={<X size={18} />}
+                    label={`Remove reminder (${formatAt(reminder)})`}
+                    onClick={act(() => removeReminder(accountId, token, msg.id))}
+                  />
+                </>
+              )}
+            </>
+          ) : submenu === 'pin' ? (
+            <>
+              <MenuTitle>Pin message</MenuTitle>
+              {PIN_DURATIONS.map(([label, seconds]) => (
+                <MenuItem
+                  key={label}
+                  icon={<Pin size={18} />}
+                  label={label}
+                  onClick={act(() =>
+                    pinMessage(
+                      accountId,
+                      token,
+                      msg,
+                      seconds ? Math.floor(Date.now() / 1000) + seconds : undefined
+                    )
+                  )}
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              {!inThread && (
+                <MenuItem icon={<CornerUpLeft size={18} />} label="Reply in thread" onClick={act(reply)} />
+              )}
+              {msg.isReplyable !== false && !collapsed && (
+                <MenuItem icon={<Quote size={18} />} label="Quote reply" onClick={act(quoteReply)} />
+              )}
+              {!inThread && (
+                <MenuItem
+                  icon={<MailWarning size={18} />}
+                  label="Mark as unread"
+                  hint={isMac ? '⌥ click' : 'Alt+click'}
+                  onClick={act(() => markUnreadFrom(accountId, token, msg))}
+                />
+              )}
+              {(remindersSupported || canPin) && <MenuSeparator />}
+              {remindersSupported && (
+                <MenuItem icon={<AlarmClock size={18} />} label="Remind me…" onClick={openRemind} />
+              )}
+              {canPin &&
+                (pinned ? (
+                  <MenuItem
+                    icon={<PinOff size={18} />}
+                    label="Unpin"
+                    onClick={act(() => unpinMessage(accountId, token, msg.id))}
+                  />
+                ) : (
+                  <MenuItem icon={<Pin size={18} />} label="Pin…" onClick={() => setSubmenu('pin')} />
+                ))}
+              <MenuSeparator />
+              <MenuItem
+                icon={<Copy size={18} />}
+                label="Copy text"
+                onClick={act(() => copyText(toEditableText(msg) ?? toPlainText(msg)))}
+              />
+              <MenuItem
+                icon={<Link size={18} />}
+                label="Copy link"
+                onClick={act(() =>
+                  copyText(messageLink(accountId, token, msg.id), 'Link copied to clipboard')
+                )}
+              />
+              {(editable || deletable) && <MenuSeparator />}
+              {editable && (
+                <MenuItem icon={<Pencil size={18} />} label="Edit" onClick={act(startEdit)} hint="↑" />
+              )}
+              {deletable && (
+                <MenuItem
+                  icon={<Trash2 size={18} />}
+                  label="Delete"
+                  danger
+                  onClick={act(() => confirmDeleteMessage(accountId, token, msg))}
+                />
+              )}
+            </>
           )}
         </Menu>
       )}

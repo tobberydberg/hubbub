@@ -12,9 +12,14 @@ import {
   SendHorizontal,
   Smile,
   Strikethrough,
-  X
+  X,
+  BarChart3,
+  BellOff,
+  CalendarClock,
+  ChevronDown,
+  Clock
 } from 'lucide-react'
-import type { MentionSuggestion } from '@shared/talk-types'
+import { RoomType, type MentionSuggestion } from '@shared/talk-types'
 import { talk } from '@renderer/api/talk'
 import { toEditableText, toPlainText } from '@renderer/lib/messages'
 import { chatKey, hasFeature, setApp, useApp } from '@renderer/store/app'
@@ -22,7 +27,18 @@ import { usePrefs } from '@renderer/store/prefs'
 import { sendMessage, uploadFiles } from '@renderer/sync/actions'
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
-import { anchorFrom, type Anchor } from '../common/Menu'
+import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
+import { TypingIndicator, useTypingSignal } from './Typing'
+import {
+  commandInProgress,
+  commandSuggestions,
+  parseCommand,
+  unescapeSlash,
+  type SlashCommand
+} from '@renderer/lib/commands'
+import { runCommand } from '@renderer/sync/commands'
+import { pickTime, scheduleMessage } from '@renderer/sync/messaging'
+import { choiceHint, laterChoices } from '@renderer/lib/time'
 
 const isMac = window.hubbub.platform === 'darwin'
 
@@ -100,6 +116,12 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const draft = useApp((s) => s.drafts[draftKey] ?? '')
   const replyTo = useApp((s) => (thread ? null : s.replyTo[key]))
   const threadsSupported = useApp((s) => hasFeature(s.accounts[accountId], 'threads'))
+  const pollsSupported = useApp((s) => hasFeature(s.accounts[accountId], 'talk-polls'))
+  const scheduling = useApp((s) => hasFeature(s.accounts[accountId], 'scheduled-messages'))
+  const silentSupported = useApp((s) => hasFeature(s.accounts[accountId], 'silent-send'))
+  const roomType = useApp((s) => s.accounts[accountId]?.rooms[token]?.type)
+  const hasScheduled = useApp((s) => !!s.accounts[accountId]?.rooms[token]?.hasScheduledMessages)
+  const [sendMenu, setSendMenu] = useState<Anchor | null>(null)
   const sendOnCtrlEnter = usePrefs((s) => s.sendOnCtrlEnter)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -111,6 +133,19 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     items: MentionSuggestion[]
     index: number
   } | null>(null)
+
+  // Slash commands: suggestions while the command's name is typed, a usage hint after it
+  const [commandIndex, setCommandIndex] = useState(0)
+  const [commandsDismissed, setCommandsDismissed] = useState(false)
+  const commands = commandsDismissed ? null : commandSuggestions(draft)
+  const commandHint = commandInProgress(draft)
+  useEffect(() => {
+    setCommandIndex(0)
+    setCommandsDismissed(false)
+  }, [draft])
+
+  // Typing signals belong to the conversation, so the thread panel's box doesn't send them
+  const typing = useTypingSignal(accountId, token, !thread && !disabled)
 
   const setDraft = useCallback(
     (value: string) =>
@@ -167,19 +202,56 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     requestAnimationFrame(() => ref.current?.setSelectionRange(pos, pos))
   }
 
-  const submit = (): void => {
-    const text = draft.trim()
-    if (!text || disabled) return
-    const extras = thread
+  const extras = (): { replyTo?: number; threadId?: number; threadTitle?: string } =>
+    thread
       ? thread.native
         ? { threadId: thread.rootId }
         : { replyTo: thread.rootId }
       : { replyTo: replyTo?.id, threadTitle: threadTitle?.trim() || undefined }
-    void sendMessage(accountId, token, text, extras)
+
+  const post = (text: string, silent = false): void => {
+    void sendMessage(accountId, token, text, { ...extras(), ...(silent ? { silent: true } : {}) })
+  }
+
+  /** Clears the box after the message left it (sent, scheduled or run as a command) */
+  const sent = (): void => {
+    typing.stop()
     setDraft('')
     setThreadTitle(null)
     setSuggest(null)
     if (replyTo) setApp((s) => void (s.replyTo[key] = null))
+  }
+
+  const sendLater = async (at: number): Promise<void> => {
+    const text = unescapeSlash(draft.trim())
+    if (!text) return
+    if (await scheduleMessage(accountId, token, text, at, extras())) sent()
+  }
+
+  const submit = (value = draft): void => {
+    const text = value.trim()
+    if (!text || disabled) return
+    const command = parseCommand(text)
+    // Cleared first: a command may put text back into the box (/help, usage hints)
+    sent()
+    if (command) {
+      void runCommand(
+        {
+          accountId,
+          token,
+          threadId: thread?.native ? thread.rootId : undefined,
+          send: post,
+          setDraft: (next) => {
+            setDraft(next)
+            requestAnimationFrame(() => ref.current?.focus())
+          }
+        },
+        command.command,
+        command.args
+      )
+    } else {
+      post(unescapeSlash(text))
+    }
   }
 
   const editLastOwn = (): boolean => {
@@ -203,7 +275,33 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
     return false
   }
 
+  const pickCommand = (c: SlashCommand, run: boolean): void => {
+    if (run && !c.argsRequired && !c.args) submit(`/${c.name}`)
+    else {
+      setDraft(`/${c.name} `)
+      requestAnimationFrame(() => ref.current?.focus())
+    }
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (commands?.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const d = e.key === 'ArrowDown' ? 1 : -1
+        setCommandIndex((i) => (i + d + commands.length) % commands.length)
+        return
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        pickCommand(commands[commandIndex] ?? commands[0], e.key === 'Enter')
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setCommandsDismissed(true)
+        return
+      }
+    }
     if (suggest && suggest.items.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
@@ -276,6 +374,33 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   return (
     <div className="composer-wrap">
       <div className="composer">
+        {commands && commands.length > 0 && (
+          <div className="suggestion-list">
+            <div className="suggestion-header">Commands</div>
+            {commands.map((c, i) => (
+              <button
+                key={c.name}
+                className={`suggestion command${i === commandIndex ? ' selected' : ''}`}
+                onMouseEnter={() => setCommandIndex(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  pickCommand(c, false)
+                }}
+              >
+                <span className="cmd-name">
+                  /{c.name}
+                  {c.args && <span className="cmd-args"> {c.args}</span>}
+                </span>
+                <span className="sub">{c.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {!commands?.length && commandHint && !suggest?.items.length && (
+          <div className="command-hint">
+            <b>/{commandHint.name}</b> {commandHint.args} — {commandHint.description}
+          </div>
+        )}
         {suggest && suggest.items.length > 0 && (
           <div className="suggestion-list">
             <div className="suggestion-header">Mentions</div>
@@ -302,6 +427,14 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
               </button>
             ))}
           </div>
+        )}
+        {hasScheduled && !thread && (
+          <button
+            className="composer-scheduled"
+            onClick={() => setApp({ rhs: { type: 'scheduled', accountId, token } })}
+          >
+            <Clock size={13} /> You have scheduled messages here
+          </button>
         )}
         {replyTo && (
           <div className="composer-banner">
@@ -336,6 +469,8 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           onChange={(e) => {
             setDraft(e.target.value)
             updateSuggest(e.target.value, e.target.selectionStart)
+            if (e.target.value) typing.keystroke()
+            else typing.stop()
           }}
           onKeyDown={onKeyDown}
           onBlur={() => setTimeout(() => setSuggest(null), 150)}
@@ -354,7 +489,7 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           <button className="icon-btn small" title="Italic" onClick={() => format('italic')}>
             <Italic size={16} />
           </button>
-          <button className="icon-btn small" title="Strikethrough" onClick={() => format('strike')}>
+          <button className="icon-btn small fmt-extra" title="Strikethrough" onClick={() => format('strike')}>
             <Strikethrough size={16} />
           </button>
           <button className="icon-btn small" title="Link" onClick={() => format('link')}>
@@ -363,13 +498,13 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           <button className="icon-btn small" title="Code" onClick={() => format('code')}>
             <Code size={16} />
           </button>
-          <button className="icon-btn small" title="Quote" onClick={() => format('quote')}>
+          <button className="icon-btn small fmt-extra" title="Quote" onClick={() => format('quote')}>
             <Quote size={16} />
           </button>
-          <button className="icon-btn small" title="Bulleted list" onClick={() => format('ul')}>
+          <button className="icon-btn small fmt-extra" title="Bulleted list" onClick={() => format('ul')}>
             <List size={16} />
           </button>
-          <button className="icon-btn small" title="Numbered list" onClick={() => format('ol')}>
+          <button className="icon-btn small fmt-extra" title="Numbered list" onClick={() => format('ol')}>
             <ListOrdered size={16} />
           </button>
           <span className="sep" />
@@ -397,10 +532,91 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
               <MessagesSquare size={16} />
             </button>
           )}
+          {pollsSupported && roomType !== RoomType.OneToOne && roomType !== RoomType.NoteToSelf && (
+            <button
+              className="icon-btn small"
+              title="Create a poll"
+              disabled={disabled}
+              onClick={() =>
+                setApp({
+                  modal: {
+                    type: 'poll',
+                    accountId,
+                    token,
+                    threadId: thread?.native ? thread.rootId : undefined
+                  }
+                })
+              }
+            >
+              <BarChart3 size={16} />
+            </button>
+          )}
           <span className="spacer" />
-          <button className="send-btn" disabled={!draft.trim() || disabled} onClick={submit} title="Send">
-            <SendHorizontal size={16} />
-          </button>
+          <span className="send-group">
+            <button
+              className="send-btn"
+              disabled={!draft.trim() || disabled}
+              onClick={() => submit()}
+              title="Send"
+            >
+              <SendHorizontal size={16} />
+            </button>
+            {(scheduling || silentSupported) && (
+              <button
+                className="send-more"
+                disabled={!draft.trim() || disabled}
+                title="Send later or without notification"
+                onClick={(e) => setSendMenu(anchorFrom(e.currentTarget, 'right'))}
+              >
+                <ChevronDown size={14} />
+              </button>
+            )}
+          </span>
+          {sendMenu && (
+            <Menu anchor={sendMenu} onClose={() => setSendMenu(null)}>
+              {scheduling && (
+                <>
+                  <MenuTitle>Send later</MenuTitle>
+                  {laterChoices().map((c) => (
+                    <MenuItem
+                      key={c.label}
+                      icon={<Clock size={18} />}
+                      label={c.label}
+                      hint={choiceHint(c)}
+                      onClick={() => {
+                        setSendMenu(null)
+                        void sendLater(c.at)
+                      }}
+                    />
+                  ))}
+                  <MenuItem
+                    icon={<CalendarClock size={18} />}
+                    label="Custom time…"
+                    onClick={() => {
+                      setSendMenu(null)
+                      pickTime('Send later', 'Schedule', laterChoices()[3].at, (at) => void sendLater(at))
+                    }}
+                  />
+                </>
+              )}
+              {silentSupported && (
+                <>
+                  {scheduling && <MenuSeparator />}
+                  <MenuItem
+                    icon={<BellOff size={18} />}
+                    label="Send without notification"
+                    onClick={() => {
+                      setSendMenu(null)
+                      const text = draft.trim()
+                      if (!text) return
+                      sent()
+                      post(unescapeSlash(text), true)
+                    }}
+                  />
+                </>
+              )}
+            </Menu>
+          )}
         </div>
         <input
           ref={fileRef}
@@ -413,7 +629,10 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           }}
         />
       </div>
-      <div className="composer-hint">{draft ? sendHint : ''}</div>
+      <div className="composer-hint">
+        {!thread && <TypingIndicator accountId={accountId} token={token} />}
+        <span className="composer-hint-text">{draft ? sendHint : ''}</span>
+      </div>
       {emoji && <EmojiPopover anchor={emoji} onClose={() => setEmoji(null)} onSelect={insertText} />}
     </div>
   )

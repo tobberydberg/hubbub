@@ -12,6 +12,7 @@ import { CallButton } from '../calls/CallButton'
 import { RoomIcon } from '../sidebar/Sidebar'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
+import { PinnedBar } from './PinnedBar'
 import { roomTitle } from '@renderer/lib/rooms'
 
 export function ChannelView({ account, room }: { account: AccountState; room: Room }) {
@@ -66,6 +67,7 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
       onDrop={onDrop}
     >
       <ChannelHeader account={account} room={room} />
+      <PinnedBar accountId={account.info.id} room={room} />
       {!chat.loaded ? (
         <div className="empty-state">
           <div className="spinner" />

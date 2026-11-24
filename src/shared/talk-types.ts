@@ -70,6 +70,8 @@ export interface ChatMessage {
   lastEditActorDisplayName?: string
   lastEditTimestamp?: number
   silent?: boolean
+  /** Pin state (pinned-messages) among other details */
+  metaData?: { pinnedActorDisplayName?: string; pinnedAt?: number; pinnedUntil?: number }
   deleted?: boolean
   threadId?: number
   isThread?: boolean
@@ -109,6 +111,16 @@ export interface Room {
   notificationCalling?: number
   /** 1: participants must agree to recording before joining a call */
   recordingConsent?: number
+  /** Last message read by everyone with public read status (0 when ours is private) */
+  lastCommonReadMessage?: number
+  /** Still notifies while the user is on Do not disturb */
+  isImportant?: boolean
+  /** Message text is left out of notifications */
+  isSensitive?: boolean
+  /** The message pinned last, and the one the user hid */
+  lastPinnedId?: number
+  hiddenPinnedId?: number
+  hasScheduledMessages?: boolean
   status?: string
   statusIcon?: string | null
   statusMessage?: string | null

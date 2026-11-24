@@ -32,8 +32,12 @@ interface PrefsState {
   microphoneId: string | null
   speakerId: string | null
   cameraId: string | null
+  /** Blur the background of our camera in calls */
+  backgroundBlur: boolean
   /** Ring and show a notification when a call starts in a conversation */
   ringForCalls: boolean
+  /** Width of the right-hand panel (threads, members, …) in pixels; null is the default */
+  rhsWidth: number | null
   /** Call view: everyone the same size, or the speaker large */
   callLayout: 'grid' | 'speaker'
   lastAccountId: string | null
@@ -65,8 +69,10 @@ export const usePrefs = create<PrefsState>()(
       microphoneId: null,
       speakerId: null,
       cameraId: null,
+      backgroundBlur: false,
       ringForCalls: true,
       callLayout: 'grid',
+      rhsWidth: null,
       lastAccountId: null,
       lastRooms: {},
 

@@ -46,7 +46,7 @@ import {
   setTrayUnread,
   showWindow
 } from './desktop'
-import { abortRequest, davMkcol, davUpload, ocsRequest } from './http'
+import { abortRequest, davCalendars, davMkcol, davUpload, ocsRequest } from './http'
 import { handleMediaProtocol, registerMediaScheme } from './media'
 import { buildMenu } from './menu'
 import { readJson, writeJson } from './storage'
@@ -223,6 +223,11 @@ function registerIpc(): void {
   handle('ocs:request', (req: OcsRequest) => ocsRequest(getCredentials(req.accountId), req))
   handle('ocs:abort', (requestId: string) => abortRequest(requestId))
 
+  handle('dav:calendars', (accountId: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davCalendars(getCredentials(accountId), account.userId)
+  })
   handle('dav:upload', async (req: UploadRequest): Promise<UploadResult> => {
     const account = getAccount(req.accountId)
     if (!account) return { ok: false, status: 0, path: req.remotePath, error: 'Unknown account' }

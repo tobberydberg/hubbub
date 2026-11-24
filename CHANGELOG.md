@@ -6,6 +6,46 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-24
+
+Polls, pinned messages, reminders, scheduled messages, meetings, typing indicators, slash commands and
+background blur.
+
+### Added
+
+- Typing indicators: "Alice is typing…" under the message box, sent and shown the way Talk on the web does
+  (works both ways with it). Hubbub now takes part in the conversation on screen like Talk on the web, and
+  leaves it a minute after its window is hidden, so other devices are notified again.
+- Slash commands: type `/` for suggestions. `/away`, `/online`, `/dnd`, `/offline`, `/status`, `/msg`, `/call`,
+  `/invite`, `/kick`, `/join`, `/leave`, `/mute`, `/unmute`, `/header`, `/rename`, `/poll`, `/meeting`, `/me`,
+  `/shrug`, `/code`, `/search`, `/settings` and `/help`. Unknown commands are sent as messages (for Talk bots); `//` sends a
+  message starting with `/`.
+- Polls: create one with the chart button in the message box or `/poll [question]` (single or several answers,
+  results visible or hidden until it ends), vote and change your vote in the conversation, and end it.
+- Read receipts on your own messages: ✓ sent, ✓✓ read by everyone, when the server shares read status.
+- Pinned messages: pin from a message's menu for 24 hours, 7 days, 30 days or until unpinned (in direct
+  messages, or as a moderator). The latest pin shows in a bar above the conversation, which you can hide for
+  yourself.
+- Remind me later: from a message's menu, in 20 minutes up to next Monday or at a time you pick. A desktop
+  notification tells you when it's time, and "Upcoming reminders" in the account menu lists them.
+- Send later: the arrow next to Send schedules a message, or sends it without a notification. "You have
+  scheduled messages here" above the message box lists them, to send now, change the time or delete.
+- Important conversations notify you even on Do not disturb, and sensitive ones hide the message text in
+  notifications; both are in the conversation menu.
+- Schedule a meeting from the conversation menu, the Info panel or `/meeting`: Talk puts it into the calendar
+  you pick and invites the conversation's members (your Nextcloud account needs an email address for that).
+  The Info panel lists the conversation's meetings this week.
+- Background blur for your camera in calls: the sparkles button in the call view, or Settings → Calls. A
+  segmentation model finds you in every frame, on your own computer, and the rest is blurred. The setting is
+  kept for later calls.
+- The side panel (threads, members, info, search) can be resized by dragging its edge, and the size is kept;
+  double-click the edge for the default size.
+
+### Changed
+
+- In narrow conversations the message box hides strikethrough, quote and list buttons, so Send stays on the
+  same line (the Markdown still works).
+
 ## [0.2.0] - 2026-11-24
 
 Calls in Hubbub, group messages and in-app updates.
@@ -91,6 +131,7 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tobberydberg/hubbub/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tobberydberg/hubbub/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tobberydberg/hubbub/releases/tag/v0.1.0

@@ -7,6 +7,8 @@ import {
   CalendarX,
   BellOff,
   Bell,
+  BellRing,
+  EyeOff,
   ChevronDown,
   Clock,
   Compass,
@@ -51,7 +53,9 @@ import {
   openRoom,
   setCategoryCollapsed,
   setMeeting,
+  setImportant,
   setMuted,
+  setSensitive,
   showThreadsView,
   sidebarCategories,
   toggleFavorite
@@ -529,6 +533,22 @@ function RoomItem({ account, room }: { account: AccountState; room: Room }) {
             label={muted ? 'Unmute conversation' : 'Mute conversation'}
             onClick={run(() => setMuted(accountId, room.token, !muted))}
           />
+          {hasFeature(account, 'important-conversations') && (
+            <MenuItem
+              icon={<BellRing size={18} />}
+              label="Important (notify on Do not disturb)"
+              checked={!!room.isImportant}
+              onClick={run(() => setImportant(accountId, room.token, !room.isImportant))}
+            />
+          )}
+          {hasFeature(account, 'sensitive-conversations') && (
+            <MenuItem
+              icon={<EyeOff size={18} />}
+              label="Sensitive (hide text in notifications)"
+              checked={!!room.isSensitive}
+              onClick={run(() => setSensitive(accountId, room.token, !room.isSensitive))}
+            />
+          )}
           {room.unreadMessages > 0 ? (
             <MenuItem
               icon={<CheckCheck size={18} />}
@@ -555,6 +575,13 @@ function RoomItem({ account, room }: { account: AccountState; room: Room }) {
               icon={meeting ? <CalendarX size={18} /> : <CalendarPlus size={18} />}
               label={meeting ? 'Not a meeting' : 'Mark as meeting'}
               onClick={run(() => setMeeting(accountId, room.token, !meeting))}
+            />
+          )}
+          {hasFeature(account, 'schedule-meeting') && room.type !== RoomType.NoteToSelf && (
+            <MenuItem
+              icon={<CalendarClock size={18} />}
+              label="Schedule a meeting…"
+              onClick={run(() => setApp({ modal: { type: 'meeting', accountId, token: room.token } }))}
             />
           )}
           <MenuItem

@@ -25,6 +25,10 @@ export function useFakeMediaForTests(): void {
   if (app.isPackaged || !process.env.HUBBUB_FAKE_MEDIA) return
   app.commandLine.appendSwitch('use-fake-device-for-media-stream')
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
+  // A .y4m or .mjpeg video as the camera, instead of the test pattern
+  if (process.env.HUBBUB_FAKE_VIDEO) {
+    app.commandLine.appendSwitch('use-file-for-fake-video-capture', process.env.HUBBUB_FAKE_VIDEO)
+  }
 }
 
 export async function mediaAccess(kind: 'microphone' | 'camera'): Promise<boolean> {

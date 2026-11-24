@@ -3,9 +3,12 @@ import { talk } from '@renderer/api/talk'
 import { setApp, showToast, useApp, type AccountState } from '@renderer/store/app'
 import { updateCall, useCall, type CallParticipant } from '@renderer/store/call'
 import { usePrefs } from '@renderer/store/prefs'
+import { setTyping, typingKey } from '@renderer/store/typing'
+import { holdPresence, presenceYielded } from '@renderer/sync/presence'
 import { iceServers, PeerLink } from './peer'
 import { callUnsupportedReason } from './rules'
 import { HpbSignaling, type CallUpdate, type JoinedSession, type SignalData } from './signaling'
+import type { BackgroundBlur } from './blur'
 import { SpeakingDetector } from './speaking'
 
 // A call in one conversation: the conversation session on the Nextcloud server, the connection to
@@ -42,6 +45,8 @@ export function layerForWidth(width: number): number {
 export interface CallHandover {
   microphone: MediaStream | null
   camera: MediaStreamTrack | null
+  /** Keeps blurring the camera, so the video doesn't flicker */
+  blur: BackgroundBlur | null
   screen: MediaStream | null
   muted: boolean
   expanded: boolean
@@ -97,6 +102,8 @@ class CallSession {
   private ended = false
   private microphone: MediaStream | null = null
   private camera: MediaStreamTrack | null = null
+  /** The camera with its background blurred, when turned on */
+  private blur: BackgroundBlur | null = null
   private canPublishVideo = false
   private publisher: PeerLink | null = null
   private screenPublisher: PeerLink | null = null
@@ -151,8 +158,10 @@ class CallSession {
       (await navigator.mediaDevices.enumerateDevices()).some((d) => d.kind === 'videoinput')
     if (handover?.camera && this.canPublishVideo) {
       this.camera = handover.camera
-      streams.set(SELF, new MediaStream([handover.camera]))
+      this.blur = handover.blur
+      streams.set(SELF, new MediaStream([this.outgoingVideo!]))
     } else {
+      handover?.blur?.stop()
       handover?.camera?.stop()
     }
     updateCall((c) => {
@@ -189,6 +198,8 @@ class CallSession {
       throw new CallUnsupported('This server has no media server; calls in Hubbub need one for now')
     }
 
+    // Our presence in the conversation (for typing) has to be gone first, see presence.ts
+    await presenceYielded(this.accountId)
     this.ncSession = await this.joinSession()
     await this.signaling.joinRoom(this.token, this.ncSession)
 
@@ -290,7 +301,7 @@ class CallSession {
     }
     if (this.canPublishVideo) {
       const simulcast = this.signaling.features.includes('simulcast')
-      const transceiver = link.pc.addTransceiver(this.camera ?? 'video', {
+      const transceiver = link.pc.addTransceiver(this.outgoingVideo ?? 'video', {
         direction: 'sendonly',
         streams: [outgoing],
         sendEncodings: simulcast ? SIMULCAST_LAYERS : [{ maxBitrate: 900_000 }]
@@ -506,6 +517,13 @@ class CallSession {
       case 'nickChanged':
         if (typeof payload.name === 'string') this.setName(from, payload.name)
         break
+      case 'startedTyping':
+      case 'stoppedTyping': {
+        const who = this.names.get(from)
+        if (!who || who.userId === this.account.user?.id) break
+        setTyping(typingKey(this.accountId, this.token), from, data.type === 'startedTyping' ? who : null)
+        break
+      }
       case 'raiseHand':
         this.setParticipant(from, {
           handRaisedAt: payload.state ? Number(payload.timestamp) || Date.now() : 0
@@ -683,6 +701,18 @@ class CallSession {
     this.sendStatus(muted ? 'audioOff' : 'audioOn')
   }
 
+  /** Typing signals to everyone in the conversation (not only the call), like Talk on the web. */
+  sendTyping(typing: boolean): void {
+    const selfId = this.account.user?.id
+    for (const [sessionId, who] of this.names) {
+      if (sessionId === this.selfId || (who.userId && who.userId === selfId)) continue
+      this.signaling?.sendToSession(sessionId, {
+        type: typing ? 'startedTyping' : 'stoppedTyping',
+        to: sessionId
+      })
+    }
+  }
+
   setHandRaised(state: boolean): void {
     updateCall((c) => void (c.handRaised = state))
     for (const id of this.remotes) this.sendTo(id, 'raiseHand', { state, timestamp: Date.now() })
@@ -702,10 +732,14 @@ class CallSession {
         return
       }
       this.camera = track
-      streams.set(SELF, new MediaStream([track]))
-      await this.videoSender?.replaceTrack(track)
+      if (usePrefs.getState().backgroundBlur) await this.updateBlur(false)
+      if (this.camera !== track) return
+      streams.set(SELF, new MediaStream([this.outgoingVideo!]))
+      await this.videoSender?.replaceTrack(this.outgoingVideo)
     } else {
       await this.videoSender?.replaceTrack(null)
+      this.blur?.stop()
+      this.blur = null
       // Stopping the track turns the camera light off
       this.camera?.stop()
       this.camera = null
@@ -715,6 +749,44 @@ class CallSession {
     bumpStream(SELF)
     for (const id of this.remotes) this.sendTo(id, on ? 'unmute' : 'mute', { name: 'video' })
     this.sendStatus(on ? 'videoOn' : 'videoOff')
+  }
+
+  /** What we send as our video: the camera, or the camera with its background blurred */
+  private get outgoingVideo(): MediaStreamTrack | null {
+    return this.blur?.track ?? this.camera
+  }
+
+  /**
+   * Starts or stops blurring the camera as the preference says. `swap` puts the result on the call
+   * right away; turning the camera on does that itself.
+   */
+  async updateBlur(swap = true): Promise<void> {
+    const camera = this.camera
+    const wanted = usePrefs.getState().backgroundBlur && !!camera
+    if (wanted === !!this.blur) return
+    if (wanted && camera) {
+      try {
+        const { BackgroundBlur } = await import('./blur')
+        const blur = await BackgroundBlur.create(camera)
+        // The camera went off, or blur was turned off again, while the model loaded
+        if (this.camera !== camera || this.ended || !usePrefs.getState().backgroundBlur || this.blur) {
+          blur.stop()
+          return
+        }
+        this.blur = blur
+      } catch (err) {
+        console.warn('Background blur failed', err)
+        showToast('Your background could not be blurred', 'error')
+        return
+      }
+    } else {
+      this.blur?.stop()
+      this.blur = null
+    }
+    if (!swap || !this.camera) return
+    streams.set(SELF, new MediaStream([this.outgoingVideo!]))
+    await this.videoSender?.replaceTrack(this.outgoingVideo)
+    bumpStream(SELF)
   }
 
   async startScreenShare(sourceId: string): Promise<void> {
@@ -805,6 +877,7 @@ class CallSession {
     const handover: CallHandover = {
       microphone: this.microphone,
       camera: this.camera,
+      blur: this.blur,
       screen: keepScreen ? this.screen : null,
       muted: !!active?.muted,
       expanded: !!active?.expanded,
@@ -813,6 +886,7 @@ class CallSession {
     this.stopScreenShare(keepScreen)
     this.microphone = null
     this.camera = null
+    this.blur = null
     await this.leave(false, true)
     return handover
   }
@@ -820,6 +894,16 @@ class CallSession {
   async leave(endForEveryone: boolean, handingOver = false): Promise<void> {
     if (this.ended) return
     this.ended = true
+    let left!: () => void
+    holdPresence(this.accountId, new Promise<void>((resolve) => (left = resolve)))
+    try {
+      await this.release(endForEveryone, handingOver)
+    } finally {
+      left()
+    }
+  }
+
+  private async release(endForEveryone: boolean, handingOver: boolean): Promise<void> {
     for (const t of this.timers) clearTimeout(t)
     for (const id of [...this.offerTimers.keys()]) this.stopOfferRequests(id)
     this.stopScreenShare()
@@ -831,6 +915,7 @@ class CallSession {
       el.srcObject = null
     }
     for (const t of this.microphone?.getTracks() ?? []) t.stop()
+    this.blur?.stop()
     this.camera?.stop()
     streams.clear()
     // When handing over, the next call takes the view over as it is
@@ -932,6 +1017,7 @@ export async function handOverCall(
 
 function releaseHandover(handover: CallHandover | undefined): void {
   if (!handover) return
+  handover.blur?.stop()
   for (const t of [
     ...(handover.microphone?.getTracks() ?? []),
     ...(handover.screen?.getTracks() ?? []),
@@ -945,6 +1031,13 @@ function releaseHandover(handover: CallHandover | undefined): void {
 
 export function setMuted(muted: boolean): void {
   current?.setMuted(muted)
+}
+
+/** Typing signals through the call's connection, when we are in this conversation's call. */
+export function sendTypingInCall(accountId: string, token: string, typing: boolean): boolean {
+  if (!current || current.accountId !== accountId || current.token !== token) return false
+  current.sendTyping(typing)
+  return true
 }
 
 export function setHandRaised(state: boolean): void {
@@ -971,6 +1064,12 @@ function showReaction(from: string, name: string, emoji: string): void {
 
 export function setVideo(on: boolean): Promise<void> {
   return current?.setVideo(on) ?? Promise.resolve()
+}
+
+/** Blurs the background of our camera from now on, in this call and the next ones. */
+export function setBackgroundBlur(on: boolean): Promise<void> {
+  usePrefs.getState().set({ backgroundBlur: on })
+  return current?.updateBlur() ?? Promise.resolve()
 }
 
 /**

@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bell, Copy, ExternalLink, Maximize2, Minimize2, MessageSquare, Search, X } from 'lucide-react'
+import {
+  Bell,
+  CalendarClock,
+  Copy,
+  ExternalLink,
+  Maximize2,
+  Minimize2,
+  MessageSquare,
+  Search,
+  X
+} from 'lucide-react'
 import {
   NotificationLevel,
   ParticipantType,
@@ -8,8 +18,9 @@ import {
   type Room,
   type UnifiedSearchEntry
 } from '@shared/talk-types'
-import { talk } from '@renderer/api/talk'
+import { talk, type MeetingEvent } from '@renderer/api/talk'
 import { belongsTo } from '@renderer/lib/messages'
+import { formatAt } from '@renderer/lib/time'
 import {
   chatKey,
   emptyChat,
@@ -26,11 +37,26 @@ import { Avatar } from '../common/Avatar'
 import { Composer } from '../channel/Composer'
 import { MessageList } from '../channel/MessageList'
 import { FollowButton, Post } from '../channel/Post'
+import { RemindersPanel, ScheduledPanel } from './Lists'
+import { usePrefs } from '@renderer/store/prefs'
+
+const DEFAULT_WIDTH = 400
+const MIN_WIDTH = 320
+/** The conversation next to the panel keeps at least this much (also in app.css) */
+const MIN_CENTER = 480
+
+function clampWidth(width: number, panel: HTMLElement): number {
+  const center = panel.previousElementSibling?.getBoundingClientRect()
+  const max = center ? panel.getBoundingClientRect().right - center.left - MIN_CENTER : width
+  return Math.round(Math.max(MIN_WIDTH, Math.min(width, max)))
+}
 
 export function Rhs() {
   const rhs = useApp((s) => s.rhs)
   const account = useApp((s) => (s.rhs ? s.accounts[s.rhs.accountId] : undefined))
   const [expanded, setExpanded] = useState(false)
+  const savedWidth = usePrefs((s) => s.rhsWidth)
+  const [dragWidth, setDragWidth] = useState<number | null>(null)
   const threadTitle = useApp((s) =>
     s.rhs?.type === 'thread'
       ? s.chats[chatKey(s.rhs.accountId, s.rhs.token)]?.byId[s.rhs.rootId]?.threadTitle
@@ -49,14 +75,50 @@ export function Rhs() {
         ? 'Members'
         : rhs.type === 'info'
           ? 'Info'
-          : 'Search Results'
+          : rhs.type === 'scheduled'
+            ? 'Scheduled messages'
+            : rhs.type === 'reminders'
+              ? 'Upcoming reminders'
+              : 'Search Results'
   const sub =
     rhs.type === 'search'
       ? `"${rhs.query}" on ${account.info.label}`
-      : [room?.displayName, threadTitle].filter(Boolean).join(' · ')
+      : rhs.type === 'reminders'
+        ? account.info.label
+        : [room?.displayName, threadTitle].filter(Boolean).join(' · ')
 
   return (
-    <aside className={`rhs${expanded ? ' expanded' : ''}`}>
+    <aside
+      className={`rhs${expanded ? ' expanded' : ''}`}
+      style={expanded ? undefined : { width: dragWidth ?? savedWidth ?? DEFAULT_WIDTH }}
+    >
+      <div
+        className={`rhs-resize${dragWidth !== null ? ' dragging' : ''}`}
+        title="Drag to resize · double-click for the default size"
+        onDoubleClick={() => usePrefs.getState().set({ rhsWidth: null })}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          const handle = e.currentTarget
+          handle.setPointerCapture(e.pointerId)
+          const startX = e.clientX
+          const panel = handle.parentElement as HTMLElement
+          const startWidth = panel.offsetWidth
+          let width = startWidth
+          setExpanded(false)
+          const move = (ev: PointerEvent): void => {
+            width = clampWidth(startWidth + startX - ev.clientX, panel)
+            setDragWidth(width)
+          }
+          const up = (): void => {
+            handle.removeEventListener('pointermove', move)
+            handle.removeEventListener('pointerup', up)
+            usePrefs.getState().set({ rhsWidth: width })
+            setDragWidth(null)
+          }
+          handle.addEventListener('pointermove', move)
+          handle.addEventListener('pointerup', up)
+        }}
+      />
       <div className="rhs-header">
         <div className="rhs-title">
           <h3>{title}</h3>
@@ -86,7 +148,9 @@ export function Rhs() {
       {rhs.type === 'members' && room && <MembersPanel account={account} room={room} />}
       {rhs.type === 'info' && room && <InfoPanel account={account} room={room} />}
       {rhs.type === 'search' && <SearchPanel account={account} rhs={rhs} />}
-      {!room && rhs.type !== 'search' && (
+      {rhs.type === 'scheduled' && <ScheduledPanel account={account} token={rhs.token} />}
+      {rhs.type === 'reminders' && <RemindersPanel account={account} />}
+      {!room && rhs.type !== 'search' && rhs.type !== 'reminders' && (
         <div className="empty-state">
           <p>This conversation is no longer available.</p>
         </div>
@@ -321,6 +385,9 @@ function InfoPanel({ account, room }: { account: AccountState; room: Room }) {
           ))}
         </select>
       </div>
+      {hasFeature(account, 'schedule-meeting') && room.type !== RoomType.NoteToSelf && (
+        <UpcomingMeetings account={account} room={room} />
+      )}
       <div className="info-block">
         <div className="label">Link</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -338,6 +405,66 @@ function InfoPanel({ account, room }: { account: AccountState; room: Room }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** This week's events of the conversation (shared ones with the other person in a 1:1), and a way
+ *  to add one. */
+function UpcomingMeetings({ account, room }: { account: AccountState; room: Room }) {
+  const accountId = account.info.id
+  const token = room.token
+  const [events, setEvents] = useState<MeetingEvent[] | null>(null)
+  const modal = useApp((s) => s.modal)
+  const source =
+    room.type === RoomType.OneToOne
+      ? hasFeature(account, 'mutual-calendar-events') && 'mutual'
+      : hasFeature(account, 'dashboard-event-rooms') && 'dashboard'
+
+  // Reload when the meeting dialog closes, so a meeting just scheduled shows up
+  useEffect(() => {
+    if (modal || !source) return
+    let cancelled = false
+    const api = talk(accountId)
+    const load =
+      source === 'mutual'
+        ? api.mutualEvents(token)
+        : api.dashboardEvents().then((list) => list.filter((e) => e.roomToken === token))
+    load.then((list) => !cancelled && setEvents(list)).catch(() => !cancelled && setEvents([]))
+    return () => {
+      cancelled = true
+    }
+  }, [accountId, token, modal, source])
+
+  const minutes = (e: MeetingEvent): number => Math.round((e.end - e.start) / 60)
+  return (
+    <div className="info-block">
+      <div className="label">
+        <CalendarClock size={12} /> Meetings this week
+      </div>
+      {events?.length ? (
+        <div className="info-events">
+          {events.map((e, i) => (
+            <div key={`${e.start}-${i}`} className="info-event">
+              <div className="info-event-name">{e.eventName}</div>
+              <div className="info-event-time">
+                {formatAt(e.start)} ·{' '}
+                {minutes(e) < 60 ? `${minutes(e)} min` : `${+(minutes(e) / 60).toFixed(1)} h`}
+                {e.calendars?.[0] && ` · ${e.calendars[0].calendarName}`}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        events && <div className="info-muted">Nothing in your calendars for the next 7 days</div>
+      )}
+      <button
+        className="btn btn-tertiary small"
+        style={{ marginTop: 8 }}
+        onClick={() => setApp({ modal: { type: 'meeting', accountId, token } })}
+      >
+        <CalendarClock size={14} /> Schedule a meeting…
+      </button>
     </div>
   )
 }

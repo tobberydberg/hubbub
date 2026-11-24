@@ -379,6 +379,30 @@ export async function setMuted(accountId: string, token: string, muted: boolean)
   void getSync(accountId)?.refreshRooms()
 }
 
+/** Important conversations still notify while on Do not disturb */
+export async function setImportant(accountId: string, token: string, on: boolean): Promise<void> {
+  patchRoom(accountId, token, (r) => void (r.isImportant = on))
+  try {
+    await talk(accountId).setImportant(token, on)
+    showToast(on ? 'Important: notifies you even on Do not disturb' : 'No longer important')
+  } catch (err) {
+    showToast(`Could not change this: ${errorText(err)}`, 'error')
+  }
+  void getSync(accountId)?.refreshRooms()
+}
+
+/** Sensitive conversations leave the message text out of notifications */
+export async function setSensitive(accountId: string, token: string, on: boolean): Promise<void> {
+  patchRoom(accountId, token, (r) => void (r.isSensitive = on))
+  try {
+    await talk(accountId).setSensitive(token, on)
+    showToast(on ? 'Sensitive: notifications won’t show message text' : 'No longer sensitive')
+  } catch (err) {
+    showToast(`Could not change this: ${errorText(err)}`, 'error')
+  }
+  void getSync(accountId)?.refreshRooms()
+}
+
 /** Marks the newest message as unread (Talk picks the message before it as the read marker). */
 export async function markUnread(accountId: string, token: string): Promise<void> {
   try {

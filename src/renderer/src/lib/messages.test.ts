@@ -95,6 +95,14 @@ describe('toPlainText / toEditableText', () => {
     expect(toEditableText(m)).toBeNull()
   })
 
+  it('refuses to edit polls', () => {
+    const poll = msg({
+      message: '{object}',
+      messageParameters: { object: { type: 'talk-poll', id: '1', name: 'Lunch?' } }
+    })
+    expect(toEditableText(poll)).toBeNull()
+  })
+
   it('converts mentions back to ids, quoting ids with spaces', () => {
     const e = msg({
       message: 'Ping {mention-user1} and {mention-call1}',

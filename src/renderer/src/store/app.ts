@@ -61,6 +61,8 @@ export type RhsState =
   | { type: 'members'; accountId: string; token: string }
   | { type: 'info'; accountId: string; token: string }
   | { type: 'search'; accountId: string; query: string }
+  | { type: 'reminders'; accountId: string }
+  | { type: 'scheduled'; accountId: string; token: string }
 
 export type ModalState =
   | { type: 'add-server'; serverUrl?: string }
@@ -81,6 +83,9 @@ export type ModalState =
       onCancel?: () => void
     }
   | { type: 'image'; src: string; name: string; link?: string }
+  | { type: 'pick-time'; title: string; confirmLabel: string; initial: number; onPick: (at: number) => void }
+  | { type: 'poll'; accountId: string; token: string; threadId?: number; question?: string }
+  | { type: 'meeting'; accountId: string; token: string }
 
 export interface AppState {
   accounts: Record<string, AccountState>

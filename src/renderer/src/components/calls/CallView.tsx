@@ -11,6 +11,7 @@ import {
   PanelLeftOpen,
   PhoneOff,
   SmilePlus,
+  Sparkles,
   SquareUser,
   UserPlus,
   Video,
@@ -22,6 +23,7 @@ import {
   leaveCall,
   screenKey,
   sendReaction,
+  setBackgroundBlur,
   setCallExpanded,
   setHandRaised,
   setCallPoppedOut,
@@ -134,6 +136,7 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
 
   // Speaker view: whoever is talking or talked last (not us), else whoever joined first
   const layout = usePrefs((s) => s.callLayout)
+  const blur = usePrefs((s) => s.backgroundBlur)
   const speaker = useMemo<Tile | null>(() => {
     if (presentation || layout !== 'speaker') return null
     const others = tiles.filter((t) => !t.self)
@@ -299,6 +302,15 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
         >
           {call.videoOn ? <Video size={20} /> : <VideoOff size={20} />}
         </button>
+        {call.cameraAvailable && (
+          <button
+            className={`cv-btn${blur ? ' active' : ''}`}
+            title={blur ? 'Stop blurring your background' : 'Blur your background'}
+            onClick={() => void setBackgroundBlur(!blur)}
+          >
+            <Sparkles size={20} />
+          </button>
+        )}
         <button
           className={`cv-btn${call.sharing ? ' active' : ''}`}
           disabled={!call.canShareScreen}

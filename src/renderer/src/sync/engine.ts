@@ -1,11 +1,11 @@
 import type { AccountInfo } from '@shared/ipc'
 import { NotificationLevel, RoomType, type ChatMessage, type Room } from '@shared/talk-types'
-import { talk, TalkError } from '@renderer/api/talk'
+import { talk, TalkError, type ServerNotification } from '@renderer/api/talk'
 import { detectIncomingCalls } from '@renderer/calls/ringing'
 import { toPlainText } from '@renderer/lib/messages'
 import { chatKey, setApp, useApp, type AccountState } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
-import { openRoom, selectAccount } from './actions'
+import { jumpToMessage, openRoom, selectAccount } from './actions'
 import { ChatPoller, loadInitial, loadThread } from './chat'
 import { initThreadBaseline, refreshSubscribedThreads } from './threads'
 
@@ -45,6 +45,25 @@ class AccountSync {
     this.notificationTimer = setTimeout(() => void this.checkNotifications(), NOTIFICATIONS_INTERVAL)
   }
 
+  /** Talk's "remind me later" arrives as a Nextcloud notification for a message */
+  private showReminder(n: ServerNotification): void {
+    const [token, messageId] = n.object_id.split('/')
+    const account = useApp.getState().accounts[this.accountId]
+    if (!account || !token) return
+    const room = account.rooms[token]
+    const notification = new Notification(n.subject || 'Reminder', {
+      body: room?.isSensitive ? undefined : n.message,
+      silent: !usePrefs.getState().notifySound,
+      tag: `reminder/${n.notification_id}`
+    })
+    notification.onclick = () => {
+      void window.hubbub.app.focusWindow()
+      selectAccount(this.accountId)
+      if (messageId) void jumpToMessage(this.accountId, token, Number(messageId))
+      else openRoom(this.accountId, token)
+    }
+  }
+
   private async checkNotifications(): Promise<void> {
     try {
       if (useApp.getState().accounts[this.accountId]?.status === 'online') {
@@ -52,7 +71,10 @@ class AccountSync {
         if (!res.notModified) {
           this.notificationsEtag = res.etag
           const last = this.lastNotificationId
-          const fresh = last !== null && res.list.some((n) => n.app === 'spreed' && n.notification_id > last)
+          const newTalk =
+            last === null ? [] : res.list.filter((n) => n.app === 'spreed' && n.notification_id > last)
+          const fresh = newTalk.length > 0
+          for (const n of newTalk) if (n.object_type === 'reminder') this.showReminder(n)
           this.lastNotificationId = Math.max(last ?? 0, ...res.list.map((n) => n.notification_id))
           if (fresh) await this.poke()
         }
@@ -375,8 +397,10 @@ function markActiveRead(): void {
 
 // --- Notifications & badge ----------------------------------------------------
 
-function shouldNotify(room: Room): boolean {
+function shouldNotify(room: Room, account: AccountState): boolean {
   if (room.muteUntil && room.muteUntil * 1000 > Date.now()) return false
+  // Do not disturb silences everything but important conversations, as on the user's other devices
+  if (account.userStatus === 'dnd' && !room.isImportant) return false
   const level = room.notificationLevel
   if (level === NotificationLevel.Never) return false
   if (level === NotificationLevel.Always) return true
@@ -402,7 +426,7 @@ function detectNotifications(prev: AccountState, rooms: Room[]): void {
       s.activeAccountId === prev.info.id &&
       prev.activeToken === room.token &&
       prev.view === 'room'
-    if (viewing || !shouldNotify(room)) continue
+    if (viewing || !shouldNotify(room, prev)) continue
     showNotification(prev.info, room, last)
   }
 }
@@ -411,7 +435,8 @@ function showNotification(account: AccountInfo, room: Room, msg: ChatMessage): v
   const multi = useApp.getState().accountOrder.length > 1
   const isDirect = room.type === RoomType.OneToOne
   const title = multi ? `${room.displayName} · ${account.label}` : room.displayName
-  const text = toPlainText(msg) || 'Sent an attachment'
+  // Sensitive conversations show that there is a message, not what it says
+  const text = room.isSensitive ? 'New message' : toPlainText(msg) || 'Sent an attachment'
   const body = isDirect ? text : `${msg.actorDisplayName || 'Someone'}: ${text}`
   const n = new Notification(title, {
     body: body.length > 200 ? `${body.slice(0, 197)}…` : body,
