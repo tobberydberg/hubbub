@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # New versions wait a week before they're proposed: malicious releases of npm packages are usually
+    # found and pulled within days. Security updates come right away.
+    cooldown:
+      default-days: 7
     # Major versions of these need code or config changes (and @types/node follows Electron's Node),
     # so they are upgraded by hand
     ignore:
@@ -32,7 +36,11 @@ updates:
           ]
       react:
         patterns: ['react', 'react-dom', '@types/react*']
+  # Actions are pinned to commit SHAs (the release workflow can read the signing certificate);
+  # Dependabot updates the SHA and the version comment together
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
