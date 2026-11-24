@@ -7,6 +7,7 @@ import { chatKey, setApp, useApp, type AccountState } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
 import { jumpToMessage, openRoom, selectAccount } from './actions'
 import { ChatPoller, loadInitial, loadThread } from './chat'
+import { notePresenceInRooms, refreshOwnStatus } from './status'
 import { initThreadBaseline, refreshSubscribedThreads } from './threads'
 import { formatEventTime } from '@renderer/lib/calendar-time'
 import { useCalendar } from '@renderer/store/calendar'
@@ -164,10 +165,7 @@ class AccountSync {
       initThreadBaseline(this.accountId)
       this.refreshThreads()
       void this.refreshTags()
-      api
-        .userStatus()
-        .then((st) => update(this.accountId, (a) => void (a.userStatus = st.status)))
-        .catch(() => undefined)
+      void refreshOwnStatus(this.accountId)
     } catch (err) {
       this.failed(err)
     }
@@ -190,6 +188,7 @@ class AccountSync {
         a.status = 'online'
         if (a.activeToken && !next[a.activeToken]) a.activeToken = null
       })
+      notePresenceInRooms(this.accountId, rooms)
     } catch (err) {
       this.failed(err)
     }

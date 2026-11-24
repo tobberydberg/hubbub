@@ -155,7 +155,9 @@ export async function setUserStatus(accountId: string, status: string): Promise<
     const st = await talk(accountId).setUserStatus(status)
     setApp((s) => {
       const a = s.accounts[accountId]
-      if (a) a.userStatus = st.status
+      if (!a) return
+      a.userStatus = st.status
+      if (a.ownStatus) a.ownStatus = { ...a.ownStatus, ...st }
     })
   } catch (err) {
     showToast(`Could not set status: ${errorText(err)}`, 'error')

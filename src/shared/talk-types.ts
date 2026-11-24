@@ -228,6 +228,40 @@ export interface UserStatus {
   status: 'online' | 'away' | 'dnd' | 'invisible' | 'offline' | 'busy' | string
   message?: string | null
   icon?: string | null
+  /** Unix seconds when the message clears itself */
+  clearAt?: number | null
+  /** Your own status only: the predefined message's id */
+  messageId?: string | null
+  messageIsPredefined?: boolean
+  /** Your own status only: set by you rather than by Nextcloud (e.g. "In a call") */
+  statusIsUserDefined?: boolean
+}
+
+export interface PredefinedStatus {
+  id: string
+  icon: string
+  message: string
+  clearAt: { type: 'period' | 'end-of'; time: number | string } | null
+  visible?: boolean
+}
+
+/** Someone's public profile (Nextcloud 23+), as far as they share it */
+export interface UserProfile {
+  userId: string
+  displayname?: string | null
+  /** Job title */
+  role?: string | null
+  /** Company */
+  organisation?: string | null
+  headline?: string | null
+  biography?: string | null
+  address?: string | null
+  pronouns?: string | null
+  timezone?: string | null
+  /** Seconds east of UTC */
+  timezoneOffset?: number | null
+  /** Ways to reach them: email (mailto:), phone (tel:), website, social profiles, Talk */
+  actions?: { id: string; icon: string; title: string; target: string }[]
 }
 
 export interface UnifiedSearchEntry {

@@ -1764,7 +1764,8 @@ a:hover {
 
 .popover {
   position: fixed;
-  z-index: 110;
+  /* Above dialogs, which open emoji pickers and menus of their own */
+  z-index: 250;
   box-shadow: var(--elevation-5);
   border-radius: 8px;
 }
@@ -5162,4 +5163,290 @@ textarea.input {
   background: var(--center-channel-bg);
   color: var(--center-channel-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Your status ---------- */
+
+.menu-custom-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px 6px;
+  padding-right: 4px;
+  border: 1px solid var(--cc-16);
+  border-radius: var(--radius);
+}
+.menu-custom-status .mcs-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  border-radius: var(--radius);
+}
+.menu-custom-status .mcs-open:hover {
+  background: var(--cc-08);
+}
+.mcs-icon {
+  width: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  color: var(--cc-64);
+}
+.mcs-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mcs-text.placeholder {
+  color: var(--cc-64);
+}
+.mcs-message {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mcs-until {
+  font-size: 12px;
+  color: var(--cc-64);
+}
+
+.status-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.status-types button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--cc-16);
+  border-radius: var(--radius);
+  font-weight: 600;
+  color: var(--cc-72, var(--center-channel-color));
+}
+.status-types button:hover {
+  background: var(--cc-08);
+}
+.status-types button.on {
+  border-color: var(--button-bg);
+  box-shadow: inset 0 0 0 1px var(--button-bg);
+  background: color-mix(in srgb, var(--button-bg) 8%, transparent);
+}
+.status-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-input .input {
+  flex: 1;
+  padding-right: 36px;
+}
+.status-emoji {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cc-16);
+  border-radius: var(--radius);
+  font-size: 20px;
+  color: var(--cc-64);
+}
+.status-emoji:hover {
+  background: var(--cc-08);
+}
+.status-input-clear {
+  position: absolute;
+  right: 6px;
+}
+.status-suggestions {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 12px;
+}
+.status-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  text-align: left;
+}
+.status-suggestion:hover,
+.status-suggestion.on {
+  background: var(--cc-08);
+}
+.status-suggestion-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 17px;
+}
+.status-suggestion-text {
+  flex: 1;
+  font-weight: 600;
+}
+.status-suggestion-clear {
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.status-clear-row {
+  display: flex;
+  gap: 8px;
+}
+.status-clear-row .input {
+  flex: 1;
+}
+.status-clear-btn {
+  margin-right: auto;
+}
+
+/* ---------- Profile card ---------- */
+
+.profile-card {
+  width: 320px;
+  padding: 16px;
+  background: var(--center-channel-bg);
+  color: var(--center-channel-color);
+  border: 1px solid var(--cc-16);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pc-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.pc-head .avatar {
+  flex: none;
+  --status-ring: var(--center-channel-bg);
+}
+.pc-head .status-dot {
+  width: 18px;
+  height: 18px;
+  right: 0;
+  bottom: 0;
+  border-width: 3px;
+}
+.pc-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.pc-pronouns {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--cc-64);
+}
+.pc-line {
+  font-size: 13px;
+  color: var(--cc-72, var(--center-channel-color));
+}
+.pc-presence {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.pc-presence.on.online {
+  color: var(--online-indicator);
+  font-weight: 600;
+}
+.pc-presence.on.away {
+  color: var(--away-indicator);
+  font-weight: 600;
+}
+.pc-presence.on.dnd,
+.pc-presence.on.busy {
+  color: var(--dnd-indicator);
+  font-weight: 600;
+}
+.pc-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--cc-08);
+  font-size: 13px;
+}
+.pc-status-icon {
+  width: 18px;
+  text-align: center;
+  color: var(--cc-64);
+}
+.pc-until {
+  color: var(--cc-64);
+}
+.pc-headline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cc-72, var(--center-channel-color));
+}
+.pc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-detail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--center-channel-color);
+}
+.pc-detail svg {
+  flex: none;
+  color: var(--cc-64);
+}
+.pc-detail span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-detail.link {
+  color: var(--link-color);
+}
+.pc-detail.link:hover {
+  background: var(--cc-08);
+}
+.pc-actions {
+  display: flex;
+  gap: 8px;
+}
+.pc-actions .ev-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* Names and pictures that open the profile card */
+.profile-link {
+  cursor: pointer;
+}
+.post-name.profile-link:hover,
+.member-row .profile-link:hover .member-name {
+  text-decoration: underline;
+}
+.mention.profile-link:hover {
+  text-decoration: underline;
 }

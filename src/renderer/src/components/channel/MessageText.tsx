@@ -3,6 +3,8 @@ import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { MENTION_SCHEME } from '@renderer/lib/messages'
+import { useApp } from '@renderer/store/app'
+import { openProfileCard } from '../common/ProfileCard'
 
 const openExternal =
   (href: string) =>
@@ -15,6 +17,22 @@ const components: Components = {
   a({ href, children }) {
     if (href?.startsWith(MENTION_SCHEME)) {
       const self = href.endsWith('/self')
+      const [type, id] = href.slice(MENTION_SCHEME.length).split('/')
+      if (type === 'user' && id) {
+        const userId = decodeURIComponent(id)
+        return (
+          <span
+            className={`mention profile-link${self ? ' self' : ''}`}
+            onClick={(e) => {
+              const accountId = useApp.getState().activeAccountId
+              const name = e.currentTarget.textContent?.replace(/^@/, '') ?? userId
+              if (accountId) openProfileCard(accountId, userId, name, e.currentTarget)
+            }}
+          >
+            {children}
+          </span>
+        )
+      }
       return <span className={`mention${self ? ' self' : ''}`}>{children}</span>
     }
     if (!href) return <>{children}</>

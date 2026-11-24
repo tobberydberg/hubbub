@@ -36,12 +36,19 @@ export function Popover({ anchor, onClose, children, className = 'popover' }: Po
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    let left = anchor.alignRight ? anchor.x - width : anchor.x
-    let top = anchor.y
-    if (top + height > window.innerHeight - 8) top = Math.max(8, anchor.y - (anchor.height ?? 0) - height)
-    left = Math.max(8, Math.min(left, window.innerWidth - width - 8))
-    setPos({ left, top })
+    const place = (): void => {
+      const { width, height } = el.getBoundingClientRect()
+      let left = anchor.alignRight ? anchor.x - width : anchor.x
+      let top = anchor.y
+      if (top + height > window.innerHeight - 8) top = Math.max(8, anchor.y - (anchor.height ?? 0) - height)
+      left = Math.max(8, Math.min(left, window.innerWidth - width - 8))
+      setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }))
+    }
+    place()
+    // Content that loads after opening (a profile card) changes the size
+    const observer = new ResizeObserver(place)
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [anchor])
 
   useEffect(() => {

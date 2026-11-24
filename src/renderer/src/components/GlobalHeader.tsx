@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlarmClock, Circle, Clock, MinusCircle, Plus, Search, Settings, EyeOff } from 'lucide-react'
+import { AlarmClock, Plus, Search, Settings, Smile, X } from 'lucide-react'
+import { formatUntil } from '@renderer/lib/status'
 import { hasFeature, setApp, useActiveAccount } from '@renderer/store/app'
 import { setUserStatus } from '@renderer/sync/actions'
+import { clearOwnStatusMessage, refreshOwnStatus } from '@renderer/sync/status'
+import { STATUS_CHOICES } from './modals/StatusModal'
 import { Avatar } from './common/Avatar'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, useMenuState } from './common/Menu'
 import { openSearch } from './rhs/Rhs'
 import logoUrl from '../assets/logo.svg'
-
-const STATUSES = [
-  {
-    value: 'online',
-    label: 'Online',
-    icon: <Circle size={16} fill="var(--online-indicator)" stroke="none" />
-  },
-  { value: 'away', label: 'Away', icon: <Clock size={16} color="var(--away-indicator)" /> },
-  { value: 'dnd', label: 'Do not disturb', icon: <MinusCircle size={16} color="var(--dnd-indicator)" /> },
-  { value: 'invisible', label: 'Invisible', icon: <EyeOff size={16} /> }
-]
 
 export function GlobalHeader() {
   const account = useActiveAccount()
@@ -67,8 +59,17 @@ export function GlobalHeader() {
         {account && (
           <button
             className="gh-icon-btn"
-            title={account.user?.displayname}
-            onClick={(e) => menu.open(anchorFrom(e.currentTarget, 'right'), true)}
+            title={[
+              account.user?.displayname,
+              account.ownStatus?.message &&
+                `${account.ownStatus.icon ?? ''} ${account.ownStatus.message}`.trim()
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            onClick={(e) => {
+              menu.open(anchorFrom(e.currentTarget, 'right'), true)
+              void refreshOwnStatus(account.info.id)
+            }}
           >
             <Avatar
               accountId={account.info.id}
@@ -95,7 +96,38 @@ export function GlobalHeader() {
               <div className="mu-sub">@{account.user?.id ?? account.info.userId}</div>
             </div>
           </div>
-          {STATUSES.map((s) => (
+          <div className="menu-custom-status">
+            <button
+              className="mcs-open"
+              onClick={() => {
+                menu.close()
+                setApp({ modal: { type: 'status', accountId: account.info.id } })
+              }}
+            >
+              <span className="mcs-icon">{account.ownStatus?.icon || <Smile size={18} />}</span>
+              {account.ownStatus?.message ? (
+                <span className="mcs-text">
+                  <span className="mcs-message">{account.ownStatus.message}</span>
+                  {account.ownStatus.clearAt ? (
+                    <span className="mcs-until">{formatUntil(account.ownStatus.clearAt)}</span>
+                  ) : null}
+                </span>
+              ) : (
+                <span className="mcs-text placeholder">Set a custom status</span>
+              )}
+            </button>
+            {(account.ownStatus?.message || account.ownStatus?.icon) && (
+              <button
+                className="icon-btn small"
+                title="Clear the status message"
+                onClick={() => void clearOwnStatusMessage(account.info.id)}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <MenuSeparator />
+          {STATUS_CHOICES.filter((s) => s.value !== 'busy' || account.canBeBusy).map((s) => (
             <MenuItem
               key={s.value}
               icon={s.icon}

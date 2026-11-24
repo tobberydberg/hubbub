@@ -46,6 +46,7 @@ import {
 } from '@renderer/sync/actions'
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
+import { openProfileCard } from '../common/ProfileCard'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 import { Attachments } from './Attachments'
 import { MessageText } from './MessageText'
@@ -235,18 +236,34 @@ export const Post = memo(function Post(props: PostProps) {
             {formatTime(msg.timestamp)}
           </span>
         ) : (
-          <Avatar
-            accountId={accountId}
-            userId={msg.actorType === 'users' ? msg.actorId : undefined}
-            name={msg.actorDisplayName || 'Guest'}
-            size={32}
-          />
+          <span
+            className={msg.actorType === 'users' ? 'profile-link' : undefined}
+            onClick={
+              msg.actorType === 'users'
+                ? (e) => openProfileCard(accountId, msg.actorId, msg.actorDisplayName, e.currentTarget)
+                : undefined
+            }
+          >
+            <Avatar
+              accountId={accountId}
+              userId={msg.actorType === 'users' ? msg.actorId : undefined}
+              name={msg.actorDisplayName || 'Guest'}
+              size={32}
+            />
+          </span>
         )}
       </div>
       <div className="post-content">
         {!continuation && (
           <div className="post-header">
-            <span className="post-name">
+            <span
+              className={`post-name${msg.actorType === 'users' ? ' profile-link' : ''}`}
+              onClick={
+                msg.actorType === 'users'
+                  ? (e) => openProfileCard(accountId, msg.actorId, msg.actorDisplayName, e.currentTarget)
+                  : undefined
+              }
+            >
               {msg.actorDisplayName || (msg.actorType === 'guests' ? 'Guest' : 'Unknown')}
             </span>
             {msg.actorType === 'bots' && <span className="post-tag">Bot</span>}

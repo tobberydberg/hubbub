@@ -14,6 +14,7 @@ import { IncomingCalls } from './components/calls/IncomingCalls'
 import { ScreenPicker } from './components/calls/ScreenPicker'
 import { GlobalHeader } from './components/GlobalHeader'
 import { ModalHost } from './components/modals/Modals'
+import { ProfileCardHost } from './components/common/ProfileCard'
 import { Rhs } from './components/rhs/Rhs'
 import { ServerRail } from './components/sidebar/ServerRail'
 import { isCertificateError } from './components/common/Certificate'
@@ -231,6 +232,7 @@ export function App() {
       <ModalHost />
       <Toast />
       <IncomingCalls />
+      <ProfileCardHost />
       {callPoppedOut && <CallPopout />}
       {screenPicker && !callPoppedOut && <ScreenPicker />}
       {addPeople && !callPoppedOut && <AddPeople />}

@@ -22,6 +22,7 @@ import { answerInvitation, deleteEvent, moveEvent } from '@renderer/sync/calenda
 import { loadDirectory } from '@renderer/sync/people'
 import { Avatar } from '../common/Avatar'
 import { Linkified } from '../common/Linkified'
+import { openProfileCard } from '../common/ProfileCard'
 
 // A calendar event in the side panel: when and where, its call and chat, your answer, and who is
 // coming.
@@ -277,7 +278,14 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
                     name={p.name || p.email || '?'}
                     size={24}
                   />
-                  <span className="event-person-name" title={p.email}>
+                  <span
+                    className={`event-person-name${userIdOf(p) ? ' profile-link' : ''}`}
+                    title={p.email}
+                    onClick={(e) => {
+                      const id = userIdOf(p)
+                      if (id) openProfileCard(accountId, id, p.name || id, e.currentTarget)
+                    }}
+                  >
                     {p.name || p.email}
                     {p.isMe && ' (you)'}
                   </span>

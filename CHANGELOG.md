@@ -19,6 +19,14 @@ All notable changes to Hubbub are documented here. The format follows
 - An event can be moved to another of your calendars, also after you've answered it: pick the calendar in the
   event panel or the edit dialog. Nobody is told, and the answers stay as they are.
 - A repeating invitation can be answered for every occurrence or for just one.
+- Your status: the menu under your picture has **Set a custom status**, a dialog like Nextcloud's own with
+  Online, Away, Busy, Do not disturb and Invisible, a message with an emoji, suggestions (in a meeting, working
+  remotely, out sick, vacationing, traveling, …) and when it clears (after 15 minutes up to this week, or at a
+  chosen time). The menu shows your message and clears it with one click; `/status` sets it too.
+- Profile cards: click someone's name or picture (in messages, @-mentions, the member list and event invitees)
+  for their card: a bigger picture, title, company, email, phone, website and address as they share them in their
+  Nextcloud profile, their status and message, their local time when it differs from yours, and when they were
+  last active, with buttons to message or call them.
 
 - Link previews: a message with a link shows a preview of the first one, with the site, the page's title,
   description and picture, like in Mattermost. Your Nextcloud server fetches the page (as for Talk on the web,

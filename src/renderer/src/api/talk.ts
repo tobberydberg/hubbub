@@ -10,7 +10,9 @@ import type {
   SignalingSettings,
   TalkCapabilities,
   ThreadInfo,
+  PredefinedStatus,
   UnifiedSearchEntry,
+  UserProfile,
   UserStatus
 } from '@shared/talk-types'
 
@@ -471,9 +473,34 @@ export function talk(accountId: string) {
     userStatus: () => get<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status'),
     setUserStatus: (statusType: string) =>
       put<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status/status', { statusType }),
-    setStatusMessage: (message: string) =>
-      put('/ocs/v2.php/apps/user_status/api/v1/user_status/message/custom', { message }),
-    clearStatusMessage: () => del('/ocs/v2.php/apps/user_status/api/v1/user_status/message')
+    /** Nextcloud's suggested status messages ("In a meeting", "Out sick", …) */
+    predefinedStatuses: () =>
+      get<PredefinedStatus[]>('/ocs/v2.php/apps/user_status/api/v1/predefined_statuses'),
+    /** A predefined message by its id (other people see it in their language); clearAt in unix seconds */
+    setPredefinedMessage: (messageId: string, clearAt: number | null) =>
+      put<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status/message/predefined', {
+        messageId,
+        clearAt
+      }),
+    setCustomMessage: (message: string, statusIcon: string | null, clearAt: number | null) =>
+      put<UserStatus>('/ocs/v2.php/apps/user_status/api/v1/user_status/message/custom', {
+        message,
+        statusIcon,
+        clearAt
+      }),
+    clearStatusMessage: () => del('/ocs/v2.php/apps/user_status/api/v1/user_status/message'),
+    /** Someone else's status; 404 when they have never set one */
+    statusOf: (userId: string) =>
+      get<UserStatus>(`/ocs/v2.php/apps/user_status/api/v1/statuses/${encodeURIComponent(userId)}`),
+    /** Someone's profile, as far as they share it with you */
+    profile: (userId: string) => get<UserProfile>(`/ocs/v2.php/profile/${encodeURIComponent(userId)}`),
+    /** Whether the server lets users choose "Busy" (Nextcloud 30+) */
+    async supportsBusy(): Promise<boolean> {
+      const data = await get<{ capabilities: { user_status?: { supports_busy?: boolean } } }>(
+        '/ocs/v2.php/cloud/capabilities'
+      )
+      return !!data.capabilities.user_status?.supports_busy
+    }
   }
 }
 

@@ -34,6 +34,8 @@ import { closeRhs, copyText, jumpToMessage, openDirectMessage, setMuted } from '
 import { getSync } from '@renderer/sync/engine'
 import { markThreadSeen, useThreads } from '@renderer/sync/threads'
 import { Avatar } from '../common/Avatar'
+import { openProfileCard } from '../common/ProfileCard'
+import { notePresence } from '@renderer/sync/status'
 import { Composer } from '../channel/Composer'
 import { MessageList } from '../channel/MessageList'
 import { FollowButton, Post } from '../channel/Post'
@@ -262,7 +264,10 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
     let cancelled = false
     talk(accountId)
       .participants(room.token)
-      .then((p) => !cancelled && setMembers(p))
+      .then((p) => {
+        for (const m of p) if (m.actorType === 'users') notePresence(accountId, m.actorId, m.status)
+        if (!cancelled) setMembers(p)
+      })
       .catch((e) => !cancelled && setError(String(e.message ?? e)))
     return () => {
       cancelled = true
@@ -286,15 +291,33 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
 
   const row = (m: Participant) => (
     <div className="member-row" key={m.attendeeId}>
-      <Avatar
-        accountId={accountId}
-        userId={m.actorType === 'users' ? m.actorId : undefined}
-        name={m.displayName || m.actorId}
-        size={32}
-        status={m.actorType === 'users' ? (m.status ?? 'offline') : null}
-      />
+      <span
+        className={m.actorType === 'users' ? 'profile-link' : undefined}
+        onClick={
+          m.actorType === 'users'
+            ? (e) => openProfileCard(accountId, m.actorId, m.displayName || m.actorId, e.currentTarget)
+            : undefined
+        }
+      >
+        <Avatar
+          accountId={accountId}
+          userId={m.actorType === 'users' ? m.actorId : undefined}
+          name={m.displayName || m.actorId}
+          size={32}
+          status={m.actorType === 'users' ? (m.status ?? 'offline') : null}
+        />
+      </span>
       <span className="name">
-        {m.displayName || m.actorId}
+        <span
+          className={m.actorType === 'users' ? 'profile-link member-name' : 'member-name'}
+          onClick={
+            m.actorType === 'users'
+              ? (e) => openProfileCard(accountId, m.actorId, m.displayName || m.actorId, e.currentTarget)
+              : undefined
+          }
+        >
+          {m.displayName || m.actorId}
+        </span>
         {m.actorId === account.user?.id && m.actorType === 'users' ? ' (you)' : ''}
         {m.statusMessage && (
           <div className="role">

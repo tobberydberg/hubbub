@@ -32,6 +32,7 @@ import { MeetingModal } from './MeetingModal'
 import { CallSetupModal } from './CallSetupModal'
 import { EventDialog } from '../calendar/EventDialog'
 import { PollModal } from './PollModal'
+import { StatusModal } from './StatusModal'
 
 const close = (): void => setApp({ modal: null })
 
@@ -47,6 +48,8 @@ export function ModalHost() {
       return <CertificateModal modal={modal} />
     case 'settings':
       return <SettingsModal onClose={close} />
+    case 'status':
+      return <StatusModal accountId={modal.accountId} />
     case 'server-settings':
       return <ServerSettingsModal accountId={modal.accountId} />
     case 'switcher':

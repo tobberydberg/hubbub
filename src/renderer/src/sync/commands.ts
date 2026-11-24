@@ -16,6 +16,7 @@ import {
   type PersonRef
 } from './actions'
 import { loadDirectory } from './people'
+import { clearOwnStatusMessage, saveOwnStatus } from './status'
 
 // Runs slash commands (see lib/commands.ts).
 
@@ -72,9 +73,13 @@ export async function runCommand(ctx: CommandContext, command: SlashCommand, arg
         break
       }
       case 'status':
-        if (args) await api.setStatusMessage(args)
-        else await api.clearStatusMessage()
-        showToast(args ? `Status message set: ${args}` : 'Status message cleared')
+        if (args) {
+          if (await saveOwnStatus(accountId, null, { icon: null, message: args, clearAt: null }))
+            showToast(`Status message set: ${args}`)
+        } else {
+          await clearOwnStatusMessage(accountId)
+          showToast('Status message cleared')
+        }
         break
       case 'msg': {
         const { users, text } = splitMentions(args)
