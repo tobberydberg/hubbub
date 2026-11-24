@@ -120,8 +120,26 @@ const mailto = (value: unknown): string | undefined =>
 /** The Talk conversation token in a link to this server, e.g. https://cloud/index.php/call/abc123 */
 export function talkTokenIn(value: string | undefined, serverUrl: string): string | undefined {
   if (!value) return undefined
-  const base = serverUrl.replace(/\/+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`${base}/(?:index\\.php/)?call/([a-z0-9]{4,30})\\b`, 'i').exec(value)?.[1]
+  let base: URL
+  try {
+    base = new URL(serverUrl.replace(/\/*$/, '/'))
+  } catch {
+    return undefined
+  }
+  for (const [link] of value.matchAll(/https?:\/\/[^\s<>"]+/gi)) {
+    let url: URL
+    try {
+      // Without punctuation that ends the sentence around it
+      url = new URL(link.replace(/[.,;:!?)\]'>]+$/, ''))
+    } catch {
+      continue
+    }
+    if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname)) continue
+    const rest = url.pathname.slice(base.pathname.length)
+    const token = /^(?:index\.php\/)?call\/([a-z0-9]{4,30})\/?$/i.exec(rest)?.[1]
+    if (token) return token
+  }
+  return undefined
 }
 
 export interface ParseContext {

@@ -155,6 +155,19 @@ describe('helpers', () => {
     expect(
       talkTokenIn('https://other.example.com/index.php/call/abc123', 'https://cloud.example.com')
     ).toBeUndefined()
+    // A look-alike host, or the server's address inside another link, isn't the server
+    expect(talkTokenIn('https://cloudXexample.com/call/abc123', 'https://cloud.example.com')).toBeUndefined()
+    expect(
+      talkTokenIn('https://evil.test/?u=https://cloud.example.com/call/abc123', 'https://cloud.example.com')
+    ).toBeUndefined()
+    expect(
+      talkTokenIn('https://evil.test/https://cloud.example.com/call/abc123', 'https://cloud.example.com')
+    ).toBeUndefined()
+    // Servers in a subfolder, and links at the end of a sentence
+    expect(talkTokenIn('See https://host.test/nc/index.php/call/x1y2z3.', 'https://host.test/nc')).toBe(
+      'x1y2z3'
+    )
+    expect(talkTokenIn('https://host.test/call/x1y2z3', 'https://host.test/nc')).toBeUndefined()
   })
 
   it('finds the link to join a Teams, Zoom or Meet meeting', () => {
