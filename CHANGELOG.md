@@ -6,41 +6,13 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-25
+
+Your day at a glance, a notification center, out of office, files and shared items, contacts, moderation and
+breakout rooms, AI from your Nextcloud, and invitations straight from your mail server.
+
 ### Added
 
-- **Invitations straight from your mail server**: besides Nextcloud Mail, Hubbub can read meeting invitations
-  directly from an IMAP server (Settings → Calendar → Invitations from mail → Mail server). It opens the folder
-  read-only, so mails stay unread, and keeps the password in the system's keychain. Test connection checks the
-  settings and lists the folders.
-- **Check now** for invitations from mail, in Settings → Calendar, with what the last check found (new and
-  updated invitations, or what went wrong).
-
-### Fixed
-
-- One invitation that couldn't be saved stopped the whole check for invitations from mail ("HTTP 412"). Now the
-  others are still added, the failing one is named with the reason and tried again next time, and an invitation
-  whose file name is already taken in the calendar is saved under another name.
-- Looking for an invitation already in the calendar matched other events whose ID merely contained its ID, so
-  such an invitation could be skipped.
-- Calendar events were read from Chromium's cache, which kept them for a while because the calendar sends no caching
-  rules. A change was then made to an old version and refused ("the event was changed elsewhere"): updating
-  invitations from mail, and possibly answering or editing events. Events are now always checked with the server,
-  and the ETag to save with comes from the calendar itself, so web servers that compress (Apache's "-gzip") don't
-  break saving either.
-- An older cancellation was applied on top of a newer invitation, hiding the meeting (a cancellation for version 2
-  of a meeting already at version 3). Cancellations now only apply when they're as new as the meeting, mails are
-  handled oldest first, and a meeting cancelled that way comes back with "Look at all mail again".
-- Adding an invitation from mail to the calendar made Nextcloud send the organizer an answer for you ("needs
-  action", which Outlook shows as accepted). Invitations are now added without any answer; the organizer only
-  hears from you when you answer yourself.
-- Invitations to your additional email addresses (Nextcloud personal settings) are recognised as yours, with Yes,
-  Maybe and No. An invitation forwarded to you, or sent to an address Nextcloud doesn't know, gets you added as an
-  invitee without an answer, so you can answer it and the organizer hears from you. Run "Look at all mail again"
-  to fix invitations added before.
-- The day and week views start early enough to show meetings before 08:00.
-- A debug log for invitations from mail, under "Show debug" in Settings → Calendar: what every check did with each
-  mail and invitation in the last hour, with Copy, and "Look at all mail again" to check mails that were already
-  handled.
 - **Today**: a new first item in the sidebar with your day at a glance: the rest of today's meetings and
   tomorrow's, with Join; mentions and direct messages waiting for you and followed threads with new replies;
   invitations you haven't answered, with Yes, Maybe and No; the server's latest notifications; and your status
@@ -57,6 +29,9 @@ All notable changes to Hubbub are documented here. The format follows
 - **Shared items**: a button in the conversation header lists what was shared there, newest first: pictures
   and videos as a grid, files, voice messages, recordings, polls, locations and Deck cards, each with more on
   request and a way back to the message.
+- **Contacts** from Nextcloud Contacts: they're suggested when you invite people to an event, people outside
+  your server open a card with what your contacts say about them (company, title, emails, phones, address),
+  and profile cards add the phone numbers you keep for a colleague.
 - **Moderation**, in a conversation's Info panel for moderators: the lobby (with a time it opens by itself),
   read-only, deleting messages after a while, who can mention @all, who can find the conversation, what
   everyone can do (calls, microphone, camera, screen, writing, reacting), banned people, and deleting all
@@ -73,9 +48,43 @@ All notable changes to Hubbub are documented here. The format follows
   conversation (a button in the header, and a bar when there are many unread messages) or a thread; translate a
   message, into the language you pick; and writing help in the message box to rephrase, simplify, make more
   formal or translate your draft, with Undo.
-- **Contacts** from Nextcloud Contacts: they're suggested when you invite people to an event, people outside
-  your server open a card with what your contacts say about them (company, title, emails, phones, address),
-  and profile cards add the phone numbers you keep for a colleague.
+- **Invitations straight from your mail server**: besides Nextcloud Mail, Hubbub can read meeting invitations
+  directly from an IMAP server (Settings → Calendar → Invitations from mail → Mail server). It opens the folder
+  read-only, so mails stay unread, and keeps the password in the system's keychain. Test connection checks the
+  settings and lists the folders.
+- **Check now** for invitations from mail, in Settings → Calendar, with what the last check found (new and
+  updated invitations, or what went wrong).
+- **Debug log** for invitations from mail, under "Show debug" in Settings → Calendar: what every check did with each
+  mail and invitation in the last hour, with Copy, and "Look at all mail again" to check mails that were already
+  handled.
+
+### Changed
+
+- Invitations to your additional email addresses (Nextcloud personal settings) are recognised as yours, with Yes,
+  Maybe and No. An invitation forwarded to you, or sent to an address Nextcloud doesn't know, gets you added as an
+  invitee without an answer, so you can answer it and the organizer hears from you. Run "Look at all mail again"
+  to fix invitations added before.
+- The day and week views start early enough to show meetings before 08:00.
+- <kbd>Cmd/Ctrl</kbd>+<kbd>A</kbd> outside a text field selects the message you're writing, not the whole window.
+
+### Fixed
+
+- Adding an invitation from mail to the calendar made Nextcloud send the organizer an answer for you ("needs
+  action", which Outlook shows as accepted). Invitations are now added without any answer; the organizer only
+  hears from you when you answer yourself.
+- An older cancellation was applied on top of a newer invitation, hiding the meeting (a cancellation for version 2
+  of a meeting already at version 3). Cancellations now only apply when they're as new as the meeting, mails are
+  handled oldest first, and a meeting cancelled that way comes back with "Look at all mail again".
+- Calendar events were read from Chromium's cache, which kept them for a while because the calendar sends no caching
+  rules. A change was then made to an old version and refused ("the event was changed elsewhere"): updating
+  invitations from mail, and possibly answering or editing events. Events are now always checked with the server,
+  and the ETag to save with comes from the calendar itself, so web servers that compress (Apache's "-gzip") don't
+  break saving either.
+- One invitation that couldn't be saved stopped the whole check for invitations from mail ("HTTP 412"). Now the
+  others are still added, the failing one is named with the reason and tried again next time, and an invitation
+  whose file name is already taken in the calendar is saved under another name.
+- Looking for an invitation already in the calendar matched other events whose ID merely contained its ID, so
+  such an invitation could be skipped.
 
 ## [0.5.0] - 2026-11-24
 
@@ -294,7 +303,8 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/tobberydberg/hubbub/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tobberydberg/hubbub/compare/v0.2.0...v0.3.0
