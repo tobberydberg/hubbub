@@ -163,6 +163,70 @@ export async function davMkcol(creds: Credentials, userId: string, remotePath: s
   }
 }
 
+const FILES_PROPFIND = `<?xml version="1.0"?>
+<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+  <d:prop>
+    <d:displayname/>
+    <d:resourcetype/>
+    <d:getcontenttype/>
+    <d:getcontentlength/>
+    <d:getlastmodified/>
+    <oc:fileid/>
+    <oc:size/>
+    <nc:has-preview/>
+    <oc:permissions/>
+  </d:prop>
+</d:propfind>`
+
+/** A folder of the user's files (PROPFIND, depth 1) as WebDAV XML; read-only. */
+export async function davFolder(creds: Credentials, userId: string, path: string): Promise<string> {
+  const parts = path.split('/').filter(Boolean)
+  if (parts.some((p) => p === '..' || p === '.')) throw new Error('Invalid path')
+  const encoded = parts.map((p) => encodeURIComponent(p)).join('/')
+  const url = `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/files/${encodeURIComponent(userId)}/${encoded}${encoded ? '/' : ''}`
+  const res = await accountSession(creds.id).fetch(url, {
+    method: 'PROPFIND',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: FILES_PROPFIND
+  })
+  if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}
+
+const addressBookHome = (creds: Credentials, userId: string): string =>
+  `${creds.serverUrl.replace(/\/+$/, '')}/remote.php/dav/addressbooks/users/${encodeURIComponent(userId)}/`
+
+/** The user's address books (PROPFIND, depth 1) as CardDAV XML; read-only. */
+export async function davAddressBooks(creds: Credentials, userId: string): Promise<string> {
+  const res = await accountSession(creds.id).fetch(addressBookHome(creds, userId), {
+    method: 'PROPFIND',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/"><d:prop><d:displayname/><d:resourcetype/><cs:getctag/></d:prop></d:propfind>`
+  })
+  if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}
+
+/** All contacts (vCards) of one of the user's address books as CardDAV XML; read-only. */
+export async function davContacts(creds: Credentials, userId: string, href: string): Promise<string> {
+  const home = new URL(addressBookHome(creds, userId))
+  const url = new URL(href, home)
+  if (
+    url.origin !== home.origin ||
+    !url.pathname.startsWith(home.pathname) ||
+    url.pathname.includes('/../')
+  ) {
+    throw new Error('Not one of your address books')
+  }
+  const res = await accountSession(creds.id).fetch(url.toString(), {
+    method: 'REPORT',
+    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    body: `<?xml version="1.0"?><card:addressbook-query xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav"><d:prop><d:getetag/><card:address-data/></d:prop></card:addressbook-query>`
+  })
+  if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}
+
 const CALENDARS_PROPFIND = `<?xml version="1.0"?>
 <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/"
   xmlns:cs="http://calendarserver.org/ns/" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.com/ns">

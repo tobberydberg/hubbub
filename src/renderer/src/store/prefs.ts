@@ -65,6 +65,8 @@ interface PrefsState {
   linkPreviews: boolean
   /** Width of the right-hand panel (threads, members, …) in pixels; null is the default */
   rhsWidth: number | null
+  /** The folder "Share from Nextcloud Files" opened last, per server */
+  filesPickerFolder: Record<string, string>
   /** Call view: everyone the same size, or the speaker large */
   callLayout: 'grid' | 'speaker'
   lastAccountId: string | null
@@ -115,6 +117,7 @@ export const usePrefs = create<PrefsState>()(
       convertEmoticons: true,
       callLayout: 'grid',
       rhsWidth: null,
+      filesPickerFolder: {},
       lastAccountId: null,
       lastRooms: {},
 

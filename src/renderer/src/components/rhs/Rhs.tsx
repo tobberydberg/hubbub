@@ -35,6 +35,7 @@ import { getSync } from '@renderer/sync/engine'
 import { markThreadSeen, useThreads } from '@renderer/sync/threads'
 import { Avatar } from '../common/Avatar'
 import { openProfileCard } from '../common/ProfileCard'
+import { SharedItemsPanel } from './SharedItems'
 import { notePresence } from '@renderer/sync/status'
 import { Composer } from '../channel/Composer'
 import { MessageList } from '../channel/MessageList'
@@ -78,13 +79,15 @@ export function Rhs() {
         ? 'Members'
         : rhs.type === 'info'
           ? 'Info'
-          : rhs.type === 'scheduled'
-            ? 'Scheduled messages'
-            : rhs.type === 'reminders'
-              ? 'Upcoming reminders'
-              : rhs.type === 'event'
-                ? 'Event'
-                : 'Search Results'
+          : rhs.type === 'shared'
+            ? 'Shared items'
+            : rhs.type === 'scheduled'
+              ? 'Scheduled messages'
+              : rhs.type === 'reminders'
+                ? 'Upcoming reminders'
+                : rhs.type === 'event'
+                  ? 'Event'
+                  : 'Search Results'
   const sub =
     rhs.type === 'search'
       ? `"${rhs.query}" on ${account.info.label}`
@@ -152,6 +155,7 @@ export function Rhs() {
       )}
       {rhs.type === 'members' && room && <MembersPanel account={account} room={room} />}
       {rhs.type === 'info' && room && <InfoPanel account={account} room={room} />}
+      {rhs.type === 'shared' && room && <SharedItemsPanel accountId={account.info.id} token={room.token} />}
       {rhs.type === 'search' && <SearchPanel account={account} rhs={rhs} />}
       {rhs.type === 'scheduled' && <ScheduledPanel account={account} token={rhs.token} />}
       {rhs.type === 'reminders' && <RemindersPanel account={account} />}

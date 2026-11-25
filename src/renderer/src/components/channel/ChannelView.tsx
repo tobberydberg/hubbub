@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react'
-import { BellOff, CalendarDays, ExternalLink, Info, Star, Users } from 'lucide-react'
+import { BellOff, CalendarDays, ExternalLink, Files, Info, Star, Users } from 'lucide-react'
 import { NotificationLevel, RoomType, type Room } from '@shared/talk-types'
 import { formatEventRange } from '@renderer/lib/events'
 import { isCollapsedReply } from '@renderer/lib/messages'
@@ -10,6 +10,7 @@ import { loadOlder } from '@renderer/sync/chat'
 import { useThreads, type ThreadEntry } from '@renderer/sync/threads'
 import { CallButton } from '../calls/CallButton'
 import { RoomIcon } from '../sidebar/Sidebar'
+import { AbsenceBanner } from './AbsenceBanner'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { PinnedBar } from './PinnedBar'
@@ -96,6 +97,9 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
           highlightId={highlightId}
         />
       )}
+      {room.type === RoomType.OneToOne && (
+        <AbsenceBanner accountId={accountId} userId={room.name} name={room.displayName} />
+      )}
       <Composer accountId={accountId} token={room.token} placeholder={placeholder} disabled={readOnly} />
       {dragOver && <div className="drop-overlay">Drop files to upload to {room.displayName}</div>}
     </main>
@@ -121,7 +125,7 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
   const accountId = account.info.id
   const rhs = useApp((s) => s.rhs)
   const muted = room.notificationLevel === NotificationLevel.Never
-  const toggleRhs = (type: 'members' | 'info'): void =>
+  const toggleRhs = (type: 'members' | 'info' | 'shared'): void =>
     setApp({
       rhs:
         rhs?.type === type && 'token' in rhs && rhs.token === room.token
@@ -176,6 +180,13 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
           <Users size={18} />
         </button>
       )}
+      <button
+        className={`icon-btn${rhs?.type === 'shared' ? ' active' : ''}`}
+        title="Shared items"
+        onClick={() => toggleRhs('shared')}
+      >
+        <Files size={18} />
+      </button>
       <button
         className={`icon-btn${rhs?.type === 'info' ? ' active' : ''}`}
         title="Info"

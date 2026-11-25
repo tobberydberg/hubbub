@@ -33,6 +33,8 @@ import { CallSetupModal } from './CallSetupModal'
 import { EventDialog } from '../calendar/EventDialog'
 import { PollModal } from './PollModal'
 import { StatusModal } from './StatusModal'
+import { FilesPickerModal } from './FilesPicker'
+import { OutOfOfficeModal } from './OutOfOfficeModal'
 
 const close = (): void => setApp({ modal: null })
 
@@ -50,6 +52,10 @@ export function ModalHost() {
       return <SettingsModal onClose={close} />
     case 'status':
       return <StatusModal accountId={modal.accountId} />
+    case 'out-of-office':
+      return <OutOfOfficeModal accountId={modal.accountId} />
+    case 'files-picker':
+      return <FilesPickerModal accountId={modal.accountId} token={modal.token} threadId={modal.threadId} />
     case 'server-settings':
       return <ServerSettingsModal accountId={modal.accountId} />
     case 'switcher':

@@ -8,6 +8,7 @@ import { usePrefs } from '@renderer/store/prefs'
 import { findEvent } from '@renderer/sync/calendar'
 import { inviteeFor, organizerFor, saveEvent } from '@renderer/sync/calendar-edit'
 import { usePeopleSearch } from '@renderer/sync/people'
+import { useContactSearch } from '@renderer/sync/contacts'
 import { Avatar } from '../common/Avatar'
 import { Modal, Toggle } from '../common/Modal'
 import { RepeatEditor } from './RepeatEditor'
@@ -347,8 +348,15 @@ function GuestPicker({
 }) {
   const [query, setQuery] = useState('')
   const { people } = usePeopleSearch(accountId, query)
+  const contacts = useContactSearch(accountId, query)
   const taken = new Set(guests.map((g) => g.email.toLowerCase()))
   const matches = query.trim() ? people.filter((p) => !guests.some((g) => g.userId === p.id)).slice(0, 6) : []
+  // People from your contacts, by each of their addresses; users of the server are listed above
+  const userEmails = new Set(matches.map((p) => p.subline?.toLowerCase()).filter(Boolean))
+  const contactMatches = contacts
+    .flatMap((c) => c.emails.map((e) => ({ name: c.name, email: e.value, type: e.type, photo: c.photo })))
+    .filter((c) => !taken.has(c.email.toLowerCase()) && !userEmails.has(c.email.toLowerCase()))
+    .slice(0, 6)
   const email = EMAIL.test(query.trim()) && !taken.has(query.trim().toLowerCase()) ? query.trim() : null
 
   const addUser = async (id: string, name: string): Promise<void> => {
@@ -389,13 +397,16 @@ function GuestPicker({
           if (e.key !== 'Enter') return
           e.preventDefault()
           if (matches[0]) void addUser(matches[0].id, matches[0].name)
-          else if (email) {
+          else if (contactMatches[0]) {
+            onChange([...guests, { name: contactMatches[0].name, email: contactMatches[0].email }])
+            setQuery('')
+          } else if (email) {
             onChange([...guests, { name: '', email }])
             setQuery('')
           }
         }}
       />
-      {(matches.length > 0 || email) && (
+      {(matches.length > 0 || contactMatches.length > 0 || email) && (
         <div className="guest-results">
           {matches.map((p) => (
             <button
@@ -408,7 +419,30 @@ function GuestPicker({
               {p.subline && <span className="sub">{p.subline}</span>}
             </button>
           ))}
-          {email && (
+          {contactMatches.map((c) => (
+            <button
+              key={c.email}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange([...guests, { name: c.name, email: c.email }])
+                setQuery('')
+              }}
+            >
+              {c.photo ? (
+                <span className="avatar" style={{ width: 24, height: 24 }}>
+                  <img src={c.photo} alt="" draggable={false} />
+                </span>
+              ) : (
+                <Avatar accountId={accountId} name={c.name} size={24} />
+              )}
+              <span>{c.name}</span>
+              <span className="sub">
+                {c.email}
+                {c.type ? ` · ${c.type}` : ''}
+              </span>
+            </button>
+          ))}
+          {email && !contactMatches.some((c) => c.email.toLowerCase() === email.toLowerCase()) && (
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {

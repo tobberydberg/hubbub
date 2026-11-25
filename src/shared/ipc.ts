@@ -144,6 +144,12 @@ export interface HubbubApi {
   upload(req: UploadRequest): Promise<UploadResult>
   /** The user's calendars, as the raw CalDAV response */
   calendars(accountId: string): Promise<string>
+  /** A folder of the user's files (e.g. "/Documents"), as the raw WebDAV response */
+  folder(accountId: string, path: string): Promise<string>
+  /** The user's address books, as the raw CardDAV response */
+  addressBooks(accountId: string): Promise<string>
+  /** The contacts of one address book (its path from addressBooks), as the raw CardDAV response */
+  contacts(accountId: string, href: string): Promise<string>
   /** Events of one calendar between two UTC times (yyyymmddThhmmssZ), repeats expanded; raw CalDAV */
   calendarEvents(
     accountId: string,

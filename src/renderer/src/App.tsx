@@ -7,6 +7,7 @@ import { usePrefs } from '@renderer/store/prefs'
 import { closeRhs, navigateRooms, selectAccount } from '@renderer/sync/actions'
 import { ChannelView } from './components/channel/ChannelView'
 import { ThreadsView } from './components/channel/ThreadsView'
+import { TodayView } from './components/today/TodayView'
 import { AddPeople } from './components/calls/AddPeople'
 import { CallPopout } from './components/calls/CallPopout'
 import { CallView } from './components/calls/CallView'
@@ -94,6 +95,7 @@ function Center() {
   })
   if (!account) return <main className="center" />
   if (account.view === 'threads') return <ThreadsView account={account} />
+  if (account.view === 'today') return <TodayView account={account} />
   // Keyed so that each conversation gets fresh scroll position, composer state and drag state
   if (room) return <ChannelView key={`${account.info.id}/${room.token}`} account={account} room={room} />
   if (!account.roomsLoaded) {

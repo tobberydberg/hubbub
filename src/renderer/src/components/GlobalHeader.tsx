@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlarmClock, Plus, Search, Settings, Smile, X } from 'lucide-react'
+import { AlarmClock, CalendarOff, Plus, Search, Settings, Smile, X } from 'lucide-react'
 import { formatUntil } from '@renderer/lib/status'
 import { hasFeature, setApp, useActiveAccount } from '@renderer/store/app'
 import { setUserStatus } from '@renderer/sync/actions'
 import { clearOwnStatusMessage, refreshOwnStatus } from '@renderer/sync/status'
+import { absentToday, loadOwnAbsence } from '@renderer/sync/absence'
 import { STATUS_CHOICES } from './modals/StatusModal'
 import { Avatar } from './common/Avatar'
+import { NotificationCenter } from './NotificationCenter'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, useMenuState } from './common/Menu'
 import { openSearch } from './rhs/Rhs'
 import logoUrl from '../assets/logo.svg'
@@ -49,6 +51,7 @@ export function GlobalHeader() {
         )}
       </div>
       <div className="gh-right">
+        <NotificationCenter />
         <button
           className="gh-icon-btn"
           title="Settings"
@@ -69,6 +72,7 @@ export function GlobalHeader() {
             onClick={(e) => {
               menu.open(anchorFrom(e.currentTarget, 'right'), true)
               void refreshOwnStatus(account.info.id)
+              void loadOwnAbsence(account.info.id)
             }}
           >
             <Avatar
@@ -139,6 +143,30 @@ export function GlobalHeader() {
               }}
             />
           ))}
+          {account.absenceSupported !== false && (
+            <MenuItem
+              icon={<CalendarOff size={18} />}
+              label={
+                account.ownAbsence ? (
+                  <span className="menu-ooo">
+                    Out of office
+                    <span className="menu-ooo-when">
+                      {absentToday(account.ownAbsence) ? 'Now, until ' : 'From '}
+                      {absentToday(account.ownAbsence)
+                        ? shortDay(account.ownAbsence.lastDay)
+                        : `${shortDay(account.ownAbsence.firstDay)} to ${shortDay(account.ownAbsence.lastDay)}`}
+                    </span>
+                  </span>
+                ) : (
+                  'Set out of office…'
+                )
+              }
+              onClick={() => {
+                menu.close()
+                setApp({ modal: { type: 'out-of-office', accountId: account.info.id } })
+              }}
+            />
+          )}
           <MenuSeparator />
           {hasFeature(account, 'remind-me-later') && (
             <MenuItem
@@ -170,4 +198,14 @@ export function GlobalHeader() {
       )}
     </header>
   )
+}
+
+/** "Wed 3 Dec" for a yyyy-mm-dd day */
+function shortDay(day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short'
+  })
 }

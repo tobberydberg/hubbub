@@ -48,7 +48,10 @@ import {
 } from './desktop'
 import {
   abortRequest,
+  davAddressBooks,
   davCalendars,
+  davContacts,
+  davFolder,
   davEvents,
   davMkcol,
   davObject,
@@ -237,6 +240,21 @@ function registerIpc(): void {
     const account = getAccount(accountId)
     if (!account) throw new Error('Unknown account')
     return davCalendars(getCredentials(accountId), account.userId)
+  })
+  handle('dav:folder', (accountId: string, path: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davFolder(getCredentials(accountId), account.userId, path)
+  })
+  handle('dav:addressbooks', (accountId: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davAddressBooks(getCredentials(accountId), account.userId)
+  })
+  handle('dav:contacts', (accountId: string, href: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    return davContacts(getCredentials(accountId), account.userId, href)
   })
   handle('dav:object', (accountId: string, req: Parameters<typeof davObject>[2]) => {
     const account = getAccount(accountId)

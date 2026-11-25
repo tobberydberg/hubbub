@@ -8,6 +8,7 @@ import { usePrefs } from '@renderer/store/prefs'
 import { jumpToMessage, openRoom, selectAccount } from './actions'
 import { ChatPoller, loadInitial, loadThread } from './chat'
 import { notePresenceInRooms, refreshOwnStatus } from './status'
+import { loadOwnAbsence } from './absence'
 import { initThreadBaseline, refreshSubscribedThreads } from './threads'
 import { formatEventTime } from '@renderer/lib/calendar-time'
 import { useCalendar } from '@renderer/store/calendar'
@@ -106,6 +107,8 @@ class AccountSync {
         const res = await talk(this.accountId).notifications(this.notificationsEtag)
         if (!res.notModified) {
           this.notificationsEtag = res.etag
+          const list = [...res.list].sort((a, b) => b.notification_id - a.notification_id)
+          update(this.accountId, (a) => void (a.notifications = list))
           const last = this.lastNotificationId
           const newTalk =
             last === null ? [] : res.list.filter((n) => n.app === 'spreed' && n.notification_id > last)
@@ -166,6 +169,7 @@ class AccountSync {
       this.refreshThreads()
       void this.refreshTags()
       void refreshOwnStatus(this.accountId)
+      void loadOwnAbsence(this.accountId)
     } catch (err) {
       this.failed(err)
     }

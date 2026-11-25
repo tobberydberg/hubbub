@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { AccountInfo, CertificateInfo, UpdateStatus } from '@shared/ipc'
+import type { OutOfOffice, ServerNotification } from '@renderer/api/talk'
 import type {
   ChatMessage,
   ConversationTag,
@@ -24,12 +25,18 @@ export interface AccountState {
   tags: ConversationTag[]
   activeToken: string | null
   /** What the server shows: a conversation, the threads list, or the calendar */
-  view: 'room' | 'threads' | 'calendar'
+  view: 'room' | 'threads' | 'calendar' | 'today'
   userStatus?: string
   /** Your status with its message, as the status menu shows it */
   ownStatus?: UserStatus
   /** Whether the server lets you choose "Busy" (Nextcloud 30+) */
   canBeBusy?: boolean
+  /** All of the server's notifications for you (Talk, files, calendar, …), newest first */
+  notifications?: ServerNotification[]
+  /** Your out-of-office settings; null when none, undefined until loaded */
+  ownAbsence?: OutOfOffice | null
+  /** Whether the server has out of office (Nextcloud 28+) */
+  absenceSupported?: boolean
   /** Native threads the user follows (Talk 22+); undefined until loaded */
   subscribedThreads?: ThreadInfo[]
 }
@@ -66,6 +73,7 @@ export type RhsState =
   | { type: 'thread'; accountId: string; token: string; rootId: number }
   | { type: 'members'; accountId: string; token: string }
   | { type: 'info'; accountId: string; token: string }
+  | { type: 'shared'; accountId: string; token: string }
   | { type: 'search'; accountId: string; query: string }
   | { type: 'reminders'; accountId: string }
   | { type: 'scheduled'; accountId: string; token: string }
@@ -96,6 +104,8 @@ export type ModalState =
   | { type: 'meeting'; accountId: string; token: string }
   | { type: 'call-setup'; accountId: string; token: string }
   | { type: 'status'; accountId: string }
+  | { type: 'out-of-office'; accountId: string }
+  | { type: 'files-picker'; accountId: string; token: string; threadId?: number }
   /** New calendar event (optionally at a time), or editing one by its id */
   | {
       type: 'event-edit'
@@ -123,7 +133,9 @@ export interface AppState {
   /** Someone's profile card, opened from their name or picture */
   profileCard: {
     accountId: string
-    userId: string
+    /** A user of the server, or else someone from your contacts by their email address */
+    userId?: string
+    email?: string
     name: string
     anchor: { x: number; y: number; height?: number; alignRight?: boolean }
   } | null

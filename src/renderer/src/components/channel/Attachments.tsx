@@ -13,7 +13,7 @@ import type { RichObjectParameter } from '@shared/talk-types'
 import { formatBytes } from '@renderer/lib/messages'
 import { setApp } from '@renderer/store/app'
 
-function FileTypeIcon({ mime }: { mime?: string }) {
+export function FileTypeIcon({ mime }: { mime?: string }) {
   const m = mime ?? ''
   if (m.startsWith('image/')) return <FileImage size={20} />
   if (m.startsWith('video/')) return <FileVideo size={20} />

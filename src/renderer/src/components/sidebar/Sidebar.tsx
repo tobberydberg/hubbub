@@ -21,6 +21,7 @@ import {
   Megaphone,
   MessageSquarePlus,
   MessagesSquare,
+  Sun,
   MoreVertical,
   NotebookPen,
   Pencil,
@@ -57,6 +58,7 @@ import {
   setMuted,
   setSensitive,
   showThreadsView,
+  showTodayView,
   sidebarCategories,
   toggleFavorite
 } from '@renderer/sync/actions'
@@ -130,6 +132,15 @@ export function Sidebar() {
       <ConnectionBanner account={account} />
 
       <div className="sidebar-scroll">
+        <div
+          className={`sidebar-item sidebar-item-static${account.view === 'today' ? ' active' : ''}`}
+          onClick={() => showTodayView(accountId)}
+        >
+          <span className="sidebar-item-icon">
+            <Sun size={18} />
+          </span>
+          <span className="sidebar-item-name">Today</span>
+        </div>
         {threads && (
           <div
             className={`sidebar-item sidebar-item-static${account.view === 'threads' ? ' active' : ''}${

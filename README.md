@@ -50,6 +50,12 @@
   panel shows the conversation's meetings this week.
 - **Important and sensitive conversations.** Important ones notify you even on Do not disturb; sensitive
   ones hide the message text in notifications.
+- **Today.** Your day at a glance: meetings with Join, what's waiting for you in the chat, open invitations and
+  notifications.
+- **Notification center** with all of Nextcloud's notifications, not only Talk's.
+- **Out of office** with a message and a stand-in, shown to people who write to you, and theirs to you.
+- **Share from Nextcloud Files** and **shared items** per conversation.
+- **Contacts** from Nextcloud Contacts when inviting people, and on their cards.
 - **Your status and profile cards.** Set Online, Away, Busy, Do not disturb or Invisible with a message like
   "🏡 Working remotely" that clears itself when you choose. Click anyone's name or picture for their card: title,
   company, contact details, status, local time and when they were last active.

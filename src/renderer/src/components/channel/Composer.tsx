@@ -7,7 +7,9 @@ import {
   List,
   ListOrdered,
   MessagesSquare,
+  FolderOpen,
   Paperclip,
+  Upload,
   Quote,
   SendHorizontal,
   Smile,
@@ -134,6 +136,7 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const convertEmoticons = usePrefs((s) => s.convertEmoticons)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [attachMenu, setAttachMenu] = useState<Anchor | null>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
   const [threadTitle, setThreadTitle] = useState<string | null>(null)
   const [suggest, setSuggest] = useState<{
@@ -633,13 +636,40 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           </button>
           <span className="sep" />
           <button
-            className="icon-btn small"
+            className={`icon-btn small${attachMenu ? ' active' : ''}`}
             title="Attach files"
-            onClick={() => fileRef.current?.click()}
+            onClick={(e) => setAttachMenu(anchorFrom(e.currentTarget))}
             disabled={disabled}
           >
             <Paperclip size={16} />
           </button>
+          {attachMenu && (
+            <Menu anchor={attachMenu} onClose={() => setAttachMenu(null)}>
+              <MenuItem
+                icon={<Upload size={18} />}
+                label="Upload from this computer…"
+                onClick={() => {
+                  setAttachMenu(null)
+                  fileRef.current?.click()
+                }}
+              />
+              <MenuItem
+                icon={<FolderOpen size={18} />}
+                label="Share from Nextcloud Files…"
+                onClick={() => {
+                  setAttachMenu(null)
+                  setApp({
+                    modal: {
+                      type: 'files-picker',
+                      accountId,
+                      token,
+                      threadId: thread?.native ? thread.rootId : undefined
+                    }
+                  })
+                }}
+              />
+            </Menu>
+          )}
           <button
             className="icon-btn small"
             title="Emoji"

@@ -6,6 +6,28 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Today**: a new first item in the sidebar with your day at a glance: the rest of today's meetings and
+  tomorrow's, with Join; mentions and direct messages waiting for you and followed threads with new replies;
+  invitations you haven't answered, with Yes, Maybe and No; the server's latest notifications; and your status
+  and out-of-office at the top.
+- **Notification center**: a bell in the header with everything Nextcloud notifies you about on the server,
+  not only Talk (shares, calendar reminders, Deck, mentions in documents, …), with their own buttons, opening
+  Talk links in Hubbub, and dismissing one or all (in Nextcloud too).
+- **Out of office** (Nextcloud 28+), in the menu under your picture: the days you're away, a short and a long
+  message and who to contact instead. Direct messages with someone who is away show it above the message box,
+  and so do profile cards.
+- **Share from Nextcloud Files**: the paperclip offers your Nextcloud files next to uploading from the
+  computer. Browse your folders, pick one or more files and share them into the conversation (or thread),
+  without downloading or uploading them again.
+- **Shared items**: a button in the conversation header lists what was shared there, newest first: pictures
+  and videos as a grid, files, voice messages, recordings, polls, locations and Deck cards, each with more on
+  request and a way back to the message.
+- **Contacts** from Nextcloud Contacts: they're suggested when you invite people to an event, people outside
+  your server open a card with what your contacts say about them (company, title, emails, phones, address),
+  and profile cards add the phone numbers you keep for a colleague.
+
 ## [0.5.0] - 2026-11-24
 
 A calendar next to the chat, meeting invitations from Nextcloud Mail, your custom status, profile cards and link

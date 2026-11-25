@@ -68,6 +68,15 @@ export function showThreadsView(accountId: string): void {
   })
 }
 
+/** Your day at a glance for this server */
+export function showTodayView(accountId: string): void {
+  updateCall((c) => void (c.expanded = false))
+  setApp((s) => {
+    const a = s.accounts[accountId]
+    if (a) a.view = 'today'
+  })
+}
+
 export function openThread(accountId: string, token: string, rootId: number): void {
   setApp({ rhs: { type: 'thread', accountId, token, rootId } })
 }

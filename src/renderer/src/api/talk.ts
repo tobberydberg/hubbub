@@ -133,6 +133,14 @@ export interface LinkReference {
   accessible?: boolean
 }
 
+export interface NotificationAction {
+  label: string
+  link: string
+  /** GET, POST, DELETE, PUT, or WEB to open the link */
+  type: string
+  primary: boolean
+}
+
 export interface ServerNotification {
   notification_id: number
   app: string
@@ -140,7 +148,39 @@ export interface ServerNotification {
   object_id: string
   subject: string
   message?: string
+  link?: string
+  icon?: string
+  /** ISO 8601 */
+  datetime?: string
+  actions?: NotificationAction[]
 }
+
+/** Your out-of-office settings (Nextcloud 28+); days as yyyy-mm-dd */
+export interface OutOfOffice {
+  firstDay: string
+  lastDay: string
+  /** Short message, shown like a status */
+  status: string
+  message: string
+  replacementUserId?: string | null
+  replacementUserDisplayName?: string | null
+}
+
+/** Someone's absence right now, as others see it */
+export interface CurrentAbsence {
+  userId: string
+  /** Unix seconds */
+  startDate: number
+  endDate: number
+  shortMessage: string
+  message: string
+  replacementUserId?: string | null
+  replacementUserDisplayName?: string | null
+}
+
+/** What a conversation's shared items are grouped by */
+export type SharedItemType =
+  'media' | 'file' | 'voice' | 'audio' | 'location' | 'deckcard' | 'poll' | 'recording' | 'other'
 
 export interface MessagesPage {
   messages: ChatMessage[]
@@ -225,6 +265,62 @@ export function talk(accountId: string) {
       if (res.status === 304) return { list: [], etag, notModified: true }
       if (!res.ok) throw new TalkError(res.error || `HTTP ${res.status}`, res.status)
       return { list: res.data ?? [], etag: res.headers.etag, notModified: false }
+    },
+
+    dismissNotification: (id: number) => del(`/ocs/v2.php/apps/notifications/api/v2/notifications/${id}`),
+    dismissAllNotifications: () => del('/ocs/v2.php/apps/notifications/api/v2/notifications'),
+    /** A notification's action (e.g. "Accept"): its link on this server with its method */
+    async notificationAction(action: NotificationAction, serverUrl: string): Promise<void> {
+      const base = serverUrl.replace(/\/+$/, '')
+      if (!action.link.startsWith(`${base}/`)) throw new Error('The action points to another server')
+      const method = action.type.toUpperCase()
+      if (method !== 'GET' && method !== 'POST' && method !== 'PUT' && method !== 'DELETE') {
+        throw new Error(`Unsupported action ${action.type}`)
+      }
+      await call(accountId, method, action.link.slice(base.length))
+    },
+
+    /** The newest shared items of each kind in a conversation */
+    sharedOverview: (token: string, limit = 7) =>
+      get<Partial<Record<SharedItemType, ChatMessage[]>>>(`${SPREED}/v1/chat/${token}/share/overview`, {
+        query: { limit }
+      }),
+    /** More shared items of one kind, older than lastKnownMessageId */
+    async sharedItems(
+      token: string,
+      objectType: SharedItemType,
+      lastKnownMessageId?: number,
+      limit = 50
+    ): Promise<ChatMessage[]> {
+      const data = await get<Record<string, ChatMessage> | ChatMessage[]>(
+        `${SPREED}/v1/chat/${token}/share`,
+        {
+          query: { objectType, lastKnownMessageId, limit }
+        }
+      )
+      return (Array.isArray(data) ? data : Object.values(data)).sort((a, b) => b.id - a.id)
+    },
+
+    // Out of office (Nextcloud 28+)
+    /** Your own settings; 404 when none are set */
+    outOfOffice: (userId: string) =>
+      get<OutOfOffice>(`/ocs/v2.php/apps/dav/api/v1/outOfOffice/${encodeURIComponent(userId)}`),
+    setOutOfOffice: (userId: string, data: OutOfOffice) =>
+      post<OutOfOffice>(
+        `/ocs/v2.php/apps/dav/api/v1/outOfOffice/${encodeURIComponent(userId)}`,
+        data as unknown as Record<string, unknown>
+      ),
+    clearOutOfOffice: (userId: string) =>
+      del(`/ocs/v2.php/apps/dav/api/v1/outOfOffice/${encodeURIComponent(userId)}`),
+    /** Someone's absence now; 404 when they're not away */
+    currentAbsence: (userId: string) =>
+      get<CurrentAbsence>(`/ocs/v2.php/apps/dav/api/v1/outOfOffice/${encodeURIComponent(userId)}/now`),
+    /** Whether the server has out-of-office (Nextcloud 28+) */
+    async supportsAbsence(): Promise<boolean> {
+      const data = await get<{ capabilities: { dav?: { 'absence-supported'?: boolean } } }>(
+        '/ocs/v2.php/cloud/capabilities'
+      )
+      return !!data.capabilities.dav?.['absence-supported']
     },
 
     // Calls. Joining a call needs a conversation session, which Nextcloud keeps in a cookie.
