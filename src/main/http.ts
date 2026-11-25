@@ -1,4 +1,5 @@
 import { app, session, type Session } from 'electron'
+import { cleanEtag } from '@shared/etag'
 import type { OcsRequest, OcsResponse, QueryValue } from '@shared/ipc'
 import { withCertificateTrust } from './certificates'
 
@@ -312,11 +313,31 @@ export async function davObject(
   } else if (req.method === 'DELETE' && req.etag) {
     headers['If-Match'] = req.etag
   }
+  // Always checked with the server: the calendar sends no caching rules, so Chromium would keep an
+  // event for a while by guessing, and a change would then be made to an old version (412 on saving)
+  if (req.method === 'GET') headers['Cache-Control'] = 'no-cache'
   const res = await accountSession(creds.id).fetch(url, { method: req.method, headers, body: req.body })
-  return {
-    status: res.status,
-    body: req.method === 'GET' ? await res.text() : '',
-    etag: res.headers.get('etag')
+  const body = req.method === 'GET' ? await res.text() : ''
+  let etag = cleanEtag(res.headers.get('etag'))
+  // The ETag a GET reports can be altered on the way (Apache's compression appends -gzip, which the
+  // next If-Match then never matches): for writing back, take the one the calendar itself keeps
+  if (req.method === 'GET' && res.status === 200) etag = (await davEtag(creds, url)) ?? etag
+  return { status: res.status, body, etag }
+}
+
+/** An event's ETag as its calendar keeps it (PROPFIND getetag) */
+async function davEtag(creds: Credentials, url: string): Promise<string | null> {
+  try {
+    const res = await accountSession(creds.id).fetch(url, {
+      method: 'PROPFIND',
+      headers: { ...authHeaders(creds), Depth: '0', 'Content-Type': 'application/xml; charset=utf-8' },
+      body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>'
+    })
+    if (res.status !== 207) return null
+    const value = /<(?:[\w-]+:)?getetag>([^<]+)</.exec(await res.text())?.[1]
+    return value ? cleanEtag(value.replace(/&quot;/g, '"')) : null
+  } catch {
+    return null
   }
 }
 
@@ -343,22 +364,39 @@ export async function davFindByUid(
 ): Promise<{ href: string; etag: string | null } | null> {
   const url = calendarUrl(creds, userId, calendarHref)
   const escaped = uid.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  // CalDAV can only search for a UID containing the text, so the answers are checked for the exact UID
   const res = await accountSession(creds.id).fetch(url, {
     method: 'REPORT',
     headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
     body: `<?xml version="1.0"?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop><d:getetag/></d:prop>
+  <d:prop><d:getetag/><c:calendar-data/></d:prop>
   <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:prop-filter name="UID"><c:text-match collation="i;octet">${escaped}</c:text-match></c:prop-filter></c:comp-filter></c:comp-filter></c:filter>
 </c:calendar-query>`
   })
   if (!res.ok && res.status !== 207) return null
   const xml = await res.text()
-  const href = /<(?:[\w-]+:)?href>([^<]+\.ics)<\/(?:[\w-]+:)?href>/.exec(xml)?.[1]
-  if (!href) return null
-  const etag = /<(?:[\w-]+:)?getetag>([^<]+)</.exec(xml)?.[1]?.replace(/&quot;/g, '"') ?? null
-  return { href, etag }
+  for (const response of xml.split(/<\/(?:[\w-]+:)?response>/)) {
+    const href = /<(?:[\w-]+:)?href>([^<]+\.ics)<\/(?:[\w-]+:)?href>/.exec(response)?.[1]
+    const data =
+      /<(?:[\w-]+:)?calendar-data[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?calendar-data>/.exec(response)?.[1] ?? ''
+    const unfolded = decodeXml(data).replace(/\r?\n[ \t]/g, '')
+    const uids = [...unfolded.matchAll(/^UID:(.*?)\r?$/gm)].map((m) => m[1].trim())
+    if (!href || !uids.includes(uid)) continue
+    const etag = /<(?:[\w-]+:)?getetag>([^<]+)</.exec(response)?.[1]?.replace(/&quot;/g, '"') ?? null
+    return { href, etag }
+  }
+  return null
 }
+
+const decodeXml = (s: string): string =>
+  s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g, '&')
 
 const UTC_STAMP = /^\d{8}T\d{6}Z$/
 

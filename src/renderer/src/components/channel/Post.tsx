@@ -1,6 +1,7 @@
 import { memo, useState, type ReactNode } from 'react'
 import {
   Copy,
+  Languages,
   CornerUpLeft,
   Link,
   MailWarning,
@@ -47,6 +48,8 @@ import {
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
 import { openProfileCard } from '../common/ProfileCard'
+import { Translation } from './Translation'
+import { canTranslate } from '@renderer/sync/ai'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 import { Attachments } from './Attachments'
 import { MessageText } from './MessageText'
@@ -87,6 +90,7 @@ const PIN_DURATIONS: [string, number | null][] = [
 export const Post = memo(function Post(props: PostProps) {
   const { accountId, token, msg, selfId, continuation, inThread, thread } = props
   const [menu, setMenu] = useState<Anchor | null>(null)
+  const [translating, setTranslating] = useState(false)
   const [submenu, setSubmenu] = useState<'remind' | 'pin' | null>(null)
   const [reminder, setReminder] = useState<number | null>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
@@ -192,6 +196,13 @@ export const Post = memo(function Post(props: PostProps) {
             markdown={r.markdown}
             plain={msg.markdown === false}
             className={jumbo ? 'jumbo' : ''}
+          />
+        )}
+        {translating && (
+          <Translation
+            accountId={accountId}
+            text={toEditableText(msg) ?? toPlainText(msg)}
+            onClose={() => setTranslating(false)}
           />
         )}
         {previewLink && <LinkPreview accountId={accountId} link={previewLink} />}
@@ -475,6 +486,13 @@ export const Post = memo(function Post(props: PostProps) {
                   <MenuItem icon={<Pin size={18} />} label="Pin…" onClick={() => setSubmenu('pin')} />
                 ))}
               <MenuSeparator />
+              {r.markdown && canTranslate(accountId) && (
+                <MenuItem
+                  icon={<Languages size={18} />}
+                  label={translating ? 'Hide translation' : 'Translate'}
+                  onClick={act(() => setTranslating(!translating))}
+                />
+              )}
               <MenuItem
                 icon={<Copy size={18} />}
                 label="Copy text"

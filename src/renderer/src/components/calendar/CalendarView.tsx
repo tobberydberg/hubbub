@@ -186,16 +186,25 @@ function TimeGrid({ accountId, days, events, calendars, selected }: GridProps) {
   const allDay = (day: number): CalendarEvent[] => events.filter((e) => e.allDay && onDay(e, day))
   const hasAllDay = days.some((d) => allDay(d).length > 0)
 
-  // Start around the working day, or an hour before now when that's earlier
+  // The earliest hour a meeting on screen starts, so early meetings aren't above the visible part
+  const earliest = Math.min(
+    24,
+    ...events
+      .filter((e) => !e.allDay && days.some((d) => onDay(e, d)))
+      .map((e) => (days.some((d) => isSameDay(d, e.start)) ? new Date(e.start).getHours() : 0))
+  )
+
+  // Start around the working day, or earlier for an early meeting or an hour before now
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
     const today = days.find((d) => isSameDay(d, now))
-    const hour = today ? Math.min(8, Math.max(0, new Date(now).getHours() - 1)) : 8
+    let hour = Math.min(8, earliest)
+    if (today) hour = Math.min(hour, Math.max(0, new Date(now).getHours() - 1))
     el.scrollTop = hour * HOUR_PX - 8
-    // Only when the shown days change, not every minute
+    // Only when the shown days or the earliest meeting change, not every minute
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstDay, days.length])
+  }, [firstDay, days.length, earliest])
 
   const columns = { gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }
   return (

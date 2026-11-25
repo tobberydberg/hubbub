@@ -2713,6 +2713,7 @@ textarea.input {
 }
 
 .call-view {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -6127,4 +6128,404 @@ textarea.input {
   height: 28px;
   padding: 0 8px;
   font-size: 12px;
+}
+
+/* ---------- Moderation ---------- */
+
+.moderation .label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cc-08);
+}
+.mod-text {
+  flex: 1;
+  min-width: 0;
+}
+.mod-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mod-sub {
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.mod-row select.input {
+  width: auto;
+  max-width: 170px;
+  height: 32px;
+  font-size: 13px;
+}
+.mod-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 8px;
+  font-size: 12px;
+  color: var(--cc-64);
+  border-bottom: 1px solid var(--cc-08);
+}
+.mod-sub-row .input {
+  flex: 1;
+  height: 32px;
+  font-size: 13px;
+}
+.mod-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.btn.danger {
+  color: var(--error-text, var(--dnd-indicator));
+}
+.mod-bans {
+  margin-top: 14px;
+}
+.mod-ban {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.mod-ban svg {
+  color: var(--dnd-indicator);
+}
+.mod-ban-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.perm-row:hover {
+  background: var(--cc-04);
+}
+.empty-state.lobby svg {
+  color: var(--cc-56);
+}
+.empty-state.lobby p {
+  max-width: 420px;
+}
+
+/* ---------- Recording and live captions ---------- */
+
+.cv-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: rgba(210, 75, 78, 0.2);
+  color: #ff8a8c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.cv-rec.starting,
+.cv-rec.failed {
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.cv-rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d24b4e;
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.cv-btn.rec {
+  background: #d24b4e;
+  color: #fff;
+}
+.cv-captions {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: min(760px, calc(100% - 48px));
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.cv-captions p {
+  margin: 0;
+}
+.cv-captions p.partial {
+  opacity: 0.8;
+}
+.cw-sub .cv-rec {
+  margin-left: 6px;
+  height: 18px;
+  font-size: 10px;
+}
+
+/* ---------- Breakout rooms ---------- */
+
+.breakout-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--button-bg-08);
+  border-bottom: 1px solid var(--cc-08);
+  font-size: 13px;
+}
+.breakout-banner > svg {
+  color: var(--button-bg);
+}
+.breakout-text {
+  flex: 1;
+  min-width: 160px;
+  font-weight: 600;
+}
+.breakout-banner .ev-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.breakout-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dnd-indicator);
+  font-weight: 600;
+  font-size: 12px;
+}
+.breakout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.breakout-room {
+  padding: 8px 10px;
+  border: 1px solid var(--cc-16);
+  border-radius: var(--radius);
+}
+.breakout-room-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.breakout-room-head .mod-title {
+  flex: 1;
+}
+
+/* ---------- AI ---------- */
+
+.summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--cc-08);
+  background: var(--button-bg-08);
+  font-size: 13px;
+  font-weight: 600;
+}
+.summary-bar > svg {
+  color: var(--button-bg);
+}
+.summary-bar > span {
+  flex: 1;
+}
+.summary-bar .ev-btn {
+  height: 30px;
+  padding: 0 10px;
+}
+.summary-panel {
+  padding: 16px 20px;
+}
+.summary-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.summary-text {
+  font-size: 14px;
+}
+.summary-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.translation {
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--button-bg);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--cc-04);
+}
+.translation-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.translation-head select {
+  border: 0;
+  background: transparent;
+  color: var(--link-color);
+  font-weight: 600;
+  font-size: 12px;
+}
+.translation-head .icon-btn {
+  margin-left: auto;
+}
+.translation-text {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.translation-wait,
+.translation-error {
+  color: var(--cc-64);
+  font-style: italic;
+}
+
+/* ---------- Invitations from a mail server ---------- */
+
+.imap-form {
+  margin: 4px 0 8px;
+  padding: 14px;
+  border: 1px solid var(--cc-16);
+  border-radius: 8px;
+  background: var(--cc-04);
+}
+.imap-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 90px;
+  gap: 10px;
+}
+.imap-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cc-72);
+}
+.imap-grid .imap-wide {
+  grid-column: 1 / -1;
+}
+.imap-grid .input {
+  height: 34px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.imap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.imap-status {
+  font-size: 12px;
+}
+.imap-status.ok {
+  color: var(--online-indicator);
+}
+.imap-status.error,
+.imap-note.error {
+  color: var(--error-text, var(--dnd-indicator));
+}
+.imap-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.imap-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+.imap-check .imap-note {
+  margin: 0;
+}
+.imap-check .spin {
+  animation: spin 0.8s linear infinite;
+}
+.imap-debug-toggle {
+  font-size: 12px;
+}
+.mail-debug {
+  flex-basis: 100%;
+  margin-top: 4px;
+  border: 1px solid var(--cc-16);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.mail-debug-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cc-08);
+  background: var(--cc-04);
+}
+.mail-debug-actions .imap-note {
+  flex: 1;
+  margin: 0;
+}
+.mail-debug-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  user-select: text;
+}
+.mail-debug-entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.mail-debug-entry.error {
+  color: var(--error-text, var(--dnd-indicator));
+}
+.mail-debug-time {
+  flex: none;
+  color: var(--cc-56);
 }

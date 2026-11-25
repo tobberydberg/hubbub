@@ -14,7 +14,7 @@ import { RoomType } from '@shared/talk-types'
 import { formatDate } from '@renderer/lib/calendar-time'
 import { setApp, showToast, useApp } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
-import { refreshCalendars } from './calendar'
+import { myAddresses, refreshCalendars } from './calendar'
 
 // Changing events on the server: answering invitations, creating, editing and deleting. Every
 // change starts from the event as the server has it now and is saved with its ETag, so nothing
@@ -79,11 +79,11 @@ export async function answerInvitation(
   answer: Answer,
   onlyThis = false
 ): Promise<boolean> {
-  const email = account(accountId).user?.email
+  const emails = myAddresses(accountId)
   const occurrence = onlyThis ? event.recurrenceId : undefined
   try {
-    if (!email) throw new Error('Your account has no email address')
-    await change(accountId, event.href, (ics) => setAnswerIcs(ics, [email], answer, occurrence))
+    if (!emails.length) throw new Error('Your account has no email address')
+    await change(accountId, event.href, (ics) => setAnswerIcs(ics, emails, answer, occurrence))
     showToast(
       `${ANSWER_TEXT[answer]} to ${event.title}${occurrence ? ` on ${formatDate(event.start, { weekday: 'short' })}` : ''}`
     )

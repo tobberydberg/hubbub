@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DesktopSettings, OcsRequest, UploadRequest, UploadResult } from '@shared/ipc'
+import type { DesktopSettings, ImapSettings, OcsRequest, UploadRequest, UploadResult } from '@shared/ipc'
 import {
   addWithAppPassword,
   cancelLogin,
@@ -60,6 +60,7 @@ import {
   davUpload,
   ocsRequest
 } from './http'
+import { getImapSettings, imapInvitations, removeImapSettings, setImapSettings, testImap } from './imap'
 import { handleMediaProtocol, registerMediaScheme } from './media'
 import { buildMenu } from './menu'
 import { readJson, writeJson } from './storage'
@@ -231,7 +232,10 @@ function registerIpc(): void {
     updateAccount(id, patch)
   )
   handle('accounts:reorder', (ids: string[]) => reorderAccounts(ids))
-  handle('accounts:remove', (id: string) => removeAccount(id))
+  handle('accounts:remove', (id: string) => {
+    removeImapSettings(id)
+    return removeAccount(id)
+  })
 
   handle('ocs:request', (req: OcsRequest) => ocsRequest(getCredentials(req.accountId), req))
   handle('ocs:abort', (requestId: string) => abortRequest(requestId))
@@ -241,6 +245,18 @@ function registerIpc(): void {
     if (!account) throw new Error('Unknown account')
     return davCalendars(getCredentials(accountId), account.userId)
   })
+  handle('imap:get', (accountId: string) => getImapSettings(accountId))
+  handle('imap:set', (accountId: string, settings: ImapSettings, password?: string) => {
+    if (!getAccount(accountId)) throw new Error('Unknown account')
+    setImapSettings(accountId, settings, password)
+  })
+  handle('imap:remove', (accountId: string) => removeImapSettings(accountId))
+  handle('imap:test', (accountId: string, settings: ImapSettings, password?: string) =>
+    testImap(accountId, settings, password)
+  )
+  handle('imap:invitations', (accountId: string, opts: { sinceDays: number; skip: string[] }) =>
+    imapInvitations(accountId, opts)
+  )
   handle('dav:folder', (accountId: string, path: string) => {
     const account = getAccount(accountId)
     if (!account) throw new Error('Unknown account')

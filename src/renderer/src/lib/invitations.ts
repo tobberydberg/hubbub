@@ -9,6 +9,10 @@ export interface MailInvitation {
   uid: string
   sequence: number
   title: string
+  /** When it (the first occurrence) starts, ms */
+  start: number
+  /** Who sent it, for the debug log */
+  organizer?: string
   /** When the last occurrence ends (ms), so meetings that are over are left alone */
   end: number
   /** The invitation as it is stored in a calendar: without METHOD */
@@ -45,6 +49,8 @@ export function parseMailInvitation(text: string, method: string): MailInvitatio
     uid,
     sequence: Number(master.getFirstPropertyValue('sequence') ?? 0),
     title: event.summary || 'Untitled event',
+    start: event.startDate?.toJSDate().getTime() ?? 0,
+    organizer: String(master.getFirstPropertyValue('organizer') ?? '').replace(/^mailto:/i, '') || undefined,
     end,
     ics: calendar.toString()
   }
@@ -86,14 +92,117 @@ export function updatedInvitation(stored: string, incoming: string, myEmails: st
   return next.toString()
 }
 
-/** The stored event marked as cancelled, as calendars show a called-off meeting */
-export function cancelledInvitation(stored: string): string {
+/**
+ * The stored event marked as cancelled, as calendars show a called-off meeting, noting the
+ * cancellation's version so that only a newer invitation brings the meeting back
+ */
+export function cancelledInvitation(stored: string, sequence: number): string {
   const calendar = new ICAL.Component(ICAL.parse(stored))
-  for (const v of calendar.getAllSubcomponents('vevent')) v.updatePropertyWithValue('status', 'CANCELLED')
+  for (const v of calendar.getAllSubcomponents('vevent')) {
+    v.updatePropertyWithValue('status', 'CANCELLED')
+    v.updatePropertyWithValue(CANCEL_SEQUENCE, String(sequence))
+  }
   return calendar.toString()
+}
+
+const CANCEL_SEQUENCE = 'x-hubbub-cancel-sequence'
+
+/** Whether a stored event is cancelled, and by which version (null when Hubbub didn't note it) */
+export function cancellationOf(ics: string): { cancelled: boolean; sequence: number | null } {
+  try {
+    const calendar = new ICAL.Component(ICAL.parse(ics))
+    const events = calendar.getAllSubcomponents('vevent')
+    const master = events.find((v) => !v.hasProperty('recurrence-id')) ?? events[0]
+    const cancelled = String(master?.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED'
+    const noted = master?.getFirstPropertyValue(CANCEL_SEQUENCE)
+    return { cancelled, sequence: noted === null || noted === undefined ? null : Number(noted) }
+  } catch {
+    return { cancelled: false, sequence: null }
+  }
+}
+
+/**
+ * Whether an invitation brings a cancelled meeting back: it has to be newer than the cancellation,
+ * or, when the cancellation's version wasn't noted, at least as new as the stored event
+ */
+export function revives(stored: string, sequence: number): boolean {
+  const c = cancellationOf(stored)
+  if (!c.cancelled) return false
+  return c.sequence === null ? sequence >= sequenceOf(stored) : sequence > c.sequence
 }
 
 /** A file name for an imported invitation, from its UID where that is safe */
 export function invitationFileName(uid: string): string {
   return /^[\w.@-]{1,120}$/.test(uid) ? `${uid}.ics` : `hubbub-${crypto.randomUUID()}.ics`
+}
+
+/**
+ * The invitation with its organizer marked as scheduling it themselves (SCHEDULE-AGENT=CLIENT), or
+ * without that mark. Saving an invitation as a new event makes Nextcloud tell the organizer the
+ * user's answer: "needs action", which Outlook shows as accepted. Marked, Nextcloud sends nothing.
+ */
+export function scheduledByClient(ics: string, on: boolean): string {
+  const calendar = new ICAL.Component(ICAL.parse(ics))
+  for (const v of calendar.getAllSubcomponents('vevent')) {
+    const organizer = v.getFirstProperty('organizer')
+    if (!organizer) continue
+    if (on) organizer.setParameter('schedule-agent', 'CLIENT')
+    else organizer.removeParameter('schedule-agent')
+  }
+  return calendar.toString()
+}
+
+const emailIn = (prop: ICAL.Property | null): string =>
+  String(prop?.getFirstValue() ?? '')
+    .replace(/^mailto:/i, '')
+    .toLowerCase()
+
+/** Whether you organize the meeting or are among its invitees (by any of your addresses) */
+export function includesMe(ics: string, myEmails: string[]): boolean {
+  const mine = new Set(myEmails.map((e) => e.toLowerCase()))
+  const calendar = new ICAL.Component(ICAL.parse(ics))
+  return calendar
+    .getAllSubcomponents('vevent')
+    .some(
+      (v) =>
+        mine.has(emailIn(v.getFirstProperty('organizer'))) ||
+        v.getAllProperties('attendee').some((a) => mine.has(emailIn(a)))
+    )
+}
+
+/**
+ * The invitation with you among the invitees, unanswered, when it reached you without listing you:
+ * forwarded to you, or sent to an address of yours the calendar doesn't know. Answering then reaches
+ * the organizer as from someone the meeting was forwarded to, as in Outlook.
+ */
+export function withMe(
+  ics: string,
+  me: { email: string; name: string },
+  myEmails: string[],
+  /** Your answer so far, when an update arrives without you (forwarded to you) */
+  partstat = 'NEEDS-ACTION'
+): string {
+  if (includesMe(ics, myEmails)) return ics
+  const calendar = new ICAL.Component(ICAL.parse(ics))
+  for (const v of calendar.getAllSubcomponents('vevent')) {
+    const attendee = new ICAL.Property('attendee', v)
+    attendee.setValue(`mailto:${me.email}`)
+    if (me.name) attendee.setParameter('cn', me.name)
+    attendee.setParameter('role', 'REQ-PARTICIPANT')
+    attendee.setParameter('partstat', partstat)
+    if (partstat === 'NEEDS-ACTION') attendee.setParameter('rsvp', 'TRUE')
+    v.addProperty(attendee)
+  }
+  return calendar.toString()
+}
+
+/** Your answer in a stored event (its series), or undefined when you're not among the invitees */
+export function myAnswerIn(ics: string, myEmails: string[]): string | undefined {
+  const mine = new Set(myEmails.map((e) => e.toLowerCase()))
+  const calendar = new ICAL.Component(ICAL.parse(ics))
+  const events = calendar.getAllSubcomponents('vevent')
+  const master = events.find((v) => !v.hasProperty('recurrence-id')) ?? events[0]
+  const me = master?.getAllProperties('attendee').find((a) => mine.has(emailIn(a)))
+  const partstat = me?.getParameter('partstat')
+  return typeof partstat === 'string' ? partstat.toUpperCase() : undefined
 }

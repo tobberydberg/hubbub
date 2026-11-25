@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Paperclip,
   Upload,
+  Wand2,
   Quote,
   SendHorizontal,
   Smile,
@@ -24,9 +25,11 @@ import {
 import { RoomType, type MentionSuggestion } from '@shared/talk-types'
 import { talk } from '@renderer/api/talk'
 import { toEditableText, toPlainText } from '@renderer/lib/messages'
-import { chatKey, hasFeature, setApp, useApp } from '@renderer/store/app'
+import { chatKey, hasFeature, setApp, showToast, useApp } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
 import { sendMessage, uploadFiles } from '@renderer/sync/actions'
+import { aiErrorText, runTask, translateText } from '@renderer/sync/ai'
+import { WritingHelp, type WritingJob } from './WritingHelp'
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
@@ -138,6 +141,9 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const fileRef = useRef<HTMLInputElement>(null)
   const [attachMenu, setAttachMenu] = useState<Anchor | null>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
+  /** Writing help at work, and the draft before it (for undo) */
+  const [aiBusy, setAiBusy] = useState<{ label: string; abort: AbortController } | null>(null)
+  const [aiDone, setAiDone] = useState<{ label: string; before: string; after: string } | null>(null)
   const [threadTitle, setThreadTitle] = useState<string | null>(null)
   const [suggest, setSuggest] = useState<{
     query: string
@@ -179,6 +185,39 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
       }),
     [draftKey]
   )
+
+  const runWritingHelp = async (job: WritingJob): Promise<void> => {
+    const before = draft
+    const abort = new AbortController()
+    const label = job.kind === 'rewrite' ? job.label : `Translated to ${job.to.name}`
+    setAiDone(null)
+    setAiBusy({
+      label: job.kind === 'rewrite' ? busyLabel(job.label) : `Translating to ${job.to.name}`,
+      abort
+    })
+    try {
+      const after =
+        job.kind === 'rewrite'
+          ? await runTask(accountId, job.type, { input: before }, abort.signal)
+          : await translateText(accountId, before, job.to.id, abort.signal)
+      if (abort.signal.aborted) return
+      const text = after.trim()
+      // Never leave the box empty, and don't overwrite what was typed in the meantime
+      if (!text) throw new Error('The AI gave no answer')
+      if ((useApp.getState().drafts[draftKey] ?? '') !== before) {
+        showToast('You changed the message while the AI was working, so it was left as it is', 'error')
+        return
+      }
+      setDraft(text)
+      setAiDone({ label: job.kind === 'rewrite' ? doneLabel(job.label) : label, before, after: text })
+    } catch (err) {
+      if (!abort.signal.aborted) showToast(`Writing help didn’t work: ${aiErrorText(err)}`, 'error')
+    } finally {
+      setAiBusy(null)
+      // Back to typing (the menu took the focus)
+      ref.current?.focus()
+    }
+  }
 
   useLayoutEffect(() => {
     autosize(ref.current)
@@ -563,6 +602,30 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
             <Clock size={13} /> You have scheduled messages here
           </button>
         )}
+        {aiBusy && (
+          <div className="composer-banner">
+            <Wand2 size={14} />
+            <span className="banner-text">{aiBusy.label}…</span>
+            <button className="icon-btn small" onClick={() => aiBusy.abort.abort()} title="Cancel">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {aiDone && aiDone.after === draft && (
+          <div className="composer-banner">
+            <Wand2 size={14} />
+            <span className="banner-text">{aiDone.label} by AI. Check it before sending.</span>
+            <button
+              className="link-btn"
+              onClick={() => {
+                setDraft(aiDone.before)
+                setAiDone(null)
+              }}
+            >
+              Undo
+            </button>
+          </div>
+        )}
         {replyTo && (
           <div className="composer-banner">
             <Quote size={14} />
@@ -677,6 +740,11 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
           >
             <Smile size={16} />
           </button>
+          <WritingHelp
+            accountId={accountId}
+            disabled={!draft.trim() || !!aiBusy || !!disabled}
+            onRun={(job) => void runWritingHelp(job)}
+          />
           {!thread && threadsSupported && (
             <button
               className={`icon-btn small${threadTitle !== null ? ' active' : ''}`}
@@ -835,5 +903,21 @@ export function MessageEditor({
         <button onClick={() => value.trim() && onSave(value)}>save</button>
       </div>
     </div>
+  )
+}
+
+const busyLabel = (label: string): string =>
+  ({
+    Rephrase: 'Rephrasing',
+    'Make it simpler': 'Simplifying',
+    'Make it more formal': 'Making it more formal'
+  })[label] ?? 'Rewriting'
+
+/** "Rephrase" → "Rephrased" for the notice after writing help */
+function doneLabel(label: string): string {
+  return (
+    { Rephrase: 'Rephrased', 'Make it simpler': 'Made simpler', 'Make it more formal': 'Made more formal' }[
+      label
+    ] ?? 'Rewritten'
   )
 }

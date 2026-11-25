@@ -52,8 +52,10 @@ export function sortRooms(rooms: Room[], mode: SortMode): Room[] {
 export function buildCategories(input: CategoryInput): SidebarCategory[] {
   const { rooms, tags, useServerTags, localCategories, collapsed, sortModes, showArchived } = input
   const now = input.now ?? Date.now() / 1000
-  const active = rooms.filter((r) => !r.isArchived)
-  const archived = rooms.filter((r) => r.isArchived)
+  // Breakout rooms show under their conversation, not in the sidebar
+  const listed = rooms.filter((r) => r.objectType !== 'room')
+  const active = listed.filter((r) => !r.isArchived)
+  const archived = listed.filter((r) => r.isArchived)
 
   const favorites: Room[] = []
   const channels: Room[] = []

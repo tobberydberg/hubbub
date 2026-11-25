@@ -10,6 +10,7 @@ import type {
   SignalingSettings,
   TalkCapabilities,
   ThreadInfo,
+  Ban,
   PredefinedStatus,
   UnifiedSearchEntry,
   UserProfile,
@@ -131,6 +132,17 @@ export interface LinkReference {
     link?: string
   }
   accessible?: boolean
+}
+
+/** A Nextcloud AI task (task processing) */
+export interface AiTask {
+  id: number
+  type: string
+  /** STATUS_SCHEDULED, STATUS_RUNNING, STATUS_SUCCESSFUL, STATUS_FAILED, STATUS_CANCELLED, STATUS_UNKNOWN */
+  status: string
+  output?: Record<string, unknown> | null
+  errorMessage?: string | null
+  progress?: number
 }
 
 export interface NotificationAction {
@@ -337,6 +349,113 @@ export function talk(accountId: string) {
     leaveSession: (token: string) => del(`${SPREED}/v4/room/${token}/participants/active`),
     removeAttendee: (token: string, attendeeId: number) =>
       del(`${SPREED}/v4/room/${token}/attendees`, { attendeeId }),
+
+    // Moderation
+    /** state 1 lets only moderators in; timer (unix seconds) opens the lobby by itself */
+    setLobby: (token: string, state: 0 | 1, timer?: number | null) =>
+      put<Room>(`${SPREED}/v4/room/${token}/webinar/lobby`, { state, timer: timer ?? null }),
+    setReadOnly: (token: string, state: 0 | 1) => put(`${SPREED}/v4/room/${token}/read-only`, { state }),
+    /** Seconds after which new messages are deleted; 0 for never */
+    setMessageExpiration: (token: string, seconds: number) =>
+      post(`${SPREED}/v4/room/${token}/message-expiration`, { seconds }),
+    setDefaultPermissions: (token: string, permissions: number) =>
+      put<Room>(`${SPREED}/v4/room/${token}/permissions/default`, { permissions }),
+    setListable: (token: string, scope: 0 | 1 | 2) => put(`${SPREED}/v4/room/${token}/listable`, { scope }),
+    setMentionPermissions: (token: string, mentionPermissions: 0 | 1) =>
+      put(`${SPREED}/v4/room/${token}/mention-permissions`, { mentionPermissions }),
+    promoteModerator: (token: string, attendeeId: number) =>
+      post(`${SPREED}/v4/room/${token}/moderators`, { attendeeId }),
+    demoteModerator: (token: string, attendeeId: number) =>
+      del(`${SPREED}/v4/room/${token}/moderators`, { attendeeId }),
+    /** Sets one person's permissions (Permission bits; 0 back to the conversation's default) */
+    setAttendeePermissions: (token: string, attendeeId: number, permissions: number) =>
+      put(`${SPREED}/v4/room/${token}/attendees/permissions`, { attendeeId, method: 'set', permissions }),
+    bans: (token: string) => get<Ban[]>(`${SPREED}/v1/ban/${token}`),
+    ban: (token: string, actorType: string, actorId: string, internalNote: string) =>
+      post<Ban>(`${SPREED}/v1/ban/${token}`, { actorType, actorId, internalNote }),
+    unban: (token: string, banId: number) => del(`${SPREED}/v1/ban/${token}/${banId}`),
+    /** Deletes every message of the conversation, for everyone */
+    clearHistory: (token: string) => del(`${SPREED}/v1/chat/${token}`),
+
+    // Breakout rooms
+    /** mode 1 automatic, 2 manual, 3 free; attendeeMap is {attendeeId: room index} */
+    configureBreakoutRooms: (
+      token: string,
+      mode: 1 | 2 | 3,
+      amount: number,
+      attendeeMap?: Record<number, number>
+    ) =>
+      post<Room[]>(`${SPREED}/v1/breakout-rooms/${token}`, {
+        mode,
+        amount,
+        attendeeMap: attendeeMap ? JSON.stringify(attendeeMap) : undefined
+      }),
+    removeBreakoutRooms: (token: string) => del(`${SPREED}/v1/breakout-rooms/${token}`),
+    startBreakoutRooms: (token: string) => post<Room[]>(`${SPREED}/v1/breakout-rooms/${token}/rooms`),
+    stopBreakoutRooms: (token: string) => del<Room[]>(`${SPREED}/v1/breakout-rooms/${token}/rooms`),
+    broadcastToBreakoutRooms: (token: string, message: string) =>
+      post(`${SPREED}/v1/breakout-rooms/${token}/broadcast`, { message }),
+    breakoutRooms: (token: string) => get<Room[]>(`${SPREED}/v4/room/${token}/breakout-rooms`),
+    breakoutParticipants: (token: string) =>
+      get<(Participant & { roomToken: string })[]>(`${SPREED}/v4/room/${token}/breakout-rooms/participants`),
+    /** In a breakout room: ask the moderators for help, or stop asking */
+    requestAssistance: (token: string, on: boolean) =>
+      on
+        ? post(`${SPREED}/v1/breakout-rooms/${token}/request-assistance`)
+        : del(`${SPREED}/v1/breakout-rooms/${token}/request-assistance`),
+    /** Free mode: go to another breakout room of the parent conversation */
+    switchBreakoutRoom: (parentToken: string, target: string) =>
+      post<Room>(`${SPREED}/v1/breakout-rooms/${parentToken}/switch`, { target }),
+
+    // Recording (needs a recording server)
+    /** status 1 video, 2 audio */
+    startRecording: (token: string, status: 1 | 2) => post(`${SPREED}/v1/recording/${token}`, { status }),
+    stopRecording: (token: string) => del(`${SPREED}/v1/recording/${token}`),
+    /** Whether people must agree to recording before joining calls here (when the server leaves it to moderators) */
+    setRecordingConsent: (token: string, recordingConsent: 0 | 1) =>
+      put(`${SPREED}/v4/room/${token}/recording-consent`, { recordingConsent }),
+
+    // Live captions (needs the live_transcription app); you have to be in the call
+    enableLiveTranscription: (token: string) => post(`${SPREED}/v1/live-transcription/${token}`),
+    disableLiveTranscription: (token: string) => del(`${SPREED}/v1/live-transcription/${token}`),
+    liveTranscriptionLanguages: () =>
+      get<Record<string, { name: string; metadata?: { separator?: string; rtl?: boolean } }>>(
+        `${SPREED}/v1/live-transcription/languages`
+      ),
+    /** The language spoken in the call (moderators) */
+    setLiveTranscriptionLanguage: (token: string, languageId: string) =>
+      post(`${SPREED}/v1/live-transcription/${token}/language`, { languageId }),
+
+    // AI (Nextcloud's task processing: Assistant, OpenAI integration, local models, …)
+    /** Summarizes the chat from a message on; poll the task. nextOffset is set when there is more. */
+    summarizeChat: (token: string, fromMessageId: number) =>
+      post<{ taskId: number; nextOffset?: number } | null>(`${SPREED}/v1/chat/${token}/summarize`, {
+        fromMessageId
+      }),
+    taskTypes: () =>
+      get<{ types: Record<string, { name: string; description?: string }> }>(
+        '/ocs/v2.php/taskprocessing/tasktypes'
+      ),
+    scheduleTask: (type: string, input: Record<string, unknown>, customId?: string) =>
+      post<{ task: AiTask }>('/ocs/v2.php/taskprocessing/schedule', {
+        type,
+        input,
+        appId: 'hubbub',
+        customId
+      }),
+    task: (id: number) => get<{ task: AiTask }>(`/ocs/v2.php/taskprocessing/task/${id}`),
+    cancelTask: (id: number) => del(`/ocs/v2.php/taskprocessing/task/${id}`),
+    translationLanguages: () =>
+      get<{
+        languages: { from: string; fromLabel: string; to: string; toLabel: string }[]
+        languageDetection: boolean
+      }>('/ocs/v2.php/translation/languages'),
+    translate: (text: string, toLanguage: string, fromLanguage?: string | null) =>
+      post<{ text: string; from?: string | null }>('/ocs/v2.php/translation/translate', {
+        text,
+        toLanguage,
+        fromLanguage: fromLanguage ?? null
+      }),
     addParticipant: (token: string, userId: string) =>
       post(`${SPREED}/v4/room/${token}/participants`, { newParticipant: userId, source: 'users' }),
     /** Rings a conversation member who isn't in the call (moderators, send-call-notification) */
@@ -534,18 +653,24 @@ export function talk(accountId: string) {
      * recognise invitations. Nothing is marked read.
      */
     mailMessages: (mailboxId: number, opts: { limit: number; since: number; cursor?: number }) =>
-      get<{ databaseId: number; imipMessage?: boolean; dateInt?: number }[]>(
-        '/index.php/apps/mail/api/messages',
+      get<
         {
-          query: {
-            mailboxId,
-            limit: opts.limit,
-            view: 'singleton',
-            filter: `start:${opts.since}`,
-            cursor: opts.cursor
-          }
+          databaseId: number
+          imipMessage?: boolean
+          dateInt?: number
+          subject?: string
+          to?: { email?: string }[]
+          cc?: { email?: string }[]
+        }[]
+      >('/index.php/apps/mail/api/messages', {
+        query: {
+          mailboxId,
+          limit: opts.limit,
+          view: 'singleton',
+          filter: `start:${opts.since}`,
+          cursor: opts.cursor
         }
-      ),
+      }),
     /** A message's invitations (iCalendar with their method); reading them doesn't mark the mail read */
     mailScheduling: (messageId: number) =>
       get<{ scheduling?: { method: string; contents: string }[] }>(

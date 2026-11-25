@@ -11,6 +11,8 @@ import { HpbSignaling, type CallUpdate, type JoinedSession, type SignalData } fr
 import type { BackgroundBlur } from './blur'
 import { openCameraTrack, openMicrophoneStream } from './devices'
 import { SpeakingDetector } from './speaking'
+import { openRoom } from '@renderer/sync/actions'
+import { getSync } from '@renderer/sync/engine'
 
 // A call in one conversation: the conversation session on the Nextcloud server, the connection to
 // the signaling server, our published microphone and camera, and one subscription per other
@@ -192,7 +194,9 @@ class CallSession {
         participants: (u) => this.onParticipants(u),
         reset: () => void this.renegotiate(),
         connection: (state) => updateCall((c) => void (c.status = state)),
-        closed: () => void this.end('You were removed from the call')
+        closed: () => void this.end('You were removed from the call'),
+        // A moderator started or stopped breakout rooms: continue the call in the other conversation
+        switchTo: (target) => void switchCallTo(this.accountId, target)
       }
     )
     await this.signaling.connect()
@@ -522,6 +526,16 @@ class CallSession {
         this.setParticipant(from, {
           handRaisedAt: payload.state ? Number(payload.timestamp) || Date.now() : 0
         })
+        break
+      case 'transcript':
+        // Live captions: { speakerSessionId, message, langId, final }
+        if (typeof data.message === 'string' && typeof data.speakerSessionId === 'string') {
+          const name =
+            data.speakerSessionId === this.selfId
+              ? 'You'
+              : (useCall.getState().active?.participants[data.speakerSessionId]?.name ?? '')
+          showCaption(data.speakerSessionId, name, data.message, data.final !== false)
+        }
         break
       case 'reaction':
         if (typeof payload.reaction === 'string') {
@@ -1037,7 +1051,9 @@ export async function startCall(
       handRaised: false,
       reactions: [],
       selfStreamVersion: 0,
-      participants: {}
+      participants: {},
+      captionsOn: false,
+      captions: []
     }
     s.incoming = s.incoming.filter((c) => !(c.accountId === accountId && c.token === token))
   })
@@ -1118,6 +1134,74 @@ export function sendReaction(emoji: string): void {
 
 const REACTION_SHOWN = 4000
 let reactionId = 0
+
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+let captionId = 0
+const CAPTION_SHOWN = 8_000
+
+function showCaption(sessionId: string, name: string, text: string, final: boolean): void {
+  let id = 0
+  updateCall((c) => {
+    // A speaker's unfinished sentence is replaced as it grows
+    const open = c.captions.find((x) => x.sessionId === sessionId && !x.final)
+    if (open) {
+      open.text = text
+      open.final = final
+      id = open.id
+    } else {
+      id = ++captionId
+      c.captions = [...c.captions.slice(-4), { id, sessionId, name, text, final }]
+    }
+  })
+  if (final) {
+    setTimeout(
+      () => updateCall((c) => void (c.captions = c.captions.filter((x) => x.id !== id))),
+      CAPTION_SHOWN
+    )
+  }
+}
+
+/** Turns live captions on or off for us in the running call */
+export async function setCaptions(on: boolean): Promise<void> {
+  const active = useCall.getState().active
+  if (!active) return
+  try {
+    const api = talk(active.accountId)
+    if (on) await api.enableLiveTranscription(active.token)
+    else await api.disableLiveTranscription(active.token)
+    updateCall((c) => {
+      c.captionsOn = on
+      if (!on) c.captions = []
+    })
+  } catch (err) {
+    showToast(`Live captions couldn’t be turned ${on ? 'on' : 'off'}: ${errorText(err)}`, 'error')
+  }
+}
+
+/** Starts (1 video, 2 audio) or stops recording the running call; moderators */
+export async function setRecording(kind: 1 | 2 | null): Promise<void> {
+  const active = useCall.getState().active
+  if (!active) return
+  try {
+    const api = talk(active.accountId)
+    if (kind) await api.startRecording(active.token, kind)
+    else await api.stopRecording(active.token)
+    void getSync(active.accountId)?.refreshRooms()
+  } catch (err) {
+    showToast(`The recording couldn’t be ${kind ? 'started' : 'stopped'}: ${errorText(err)}`, 'error')
+  }
+}
+
+/** Continues the running call in another conversation, as breakout rooms do */
+async function switchCallTo(accountId: string, target: string): Promise<void> {
+  await getSync(accountId)?.refreshRooms()
+  const room = useApp.getState().accounts[accountId]?.rooms[target]
+  if (!room) return
+  showToast(`Moving to ${room.displayName}`)
+  await startCall(accountId, target)
+  openRoom(accountId, target)
+}
 
 function showReaction(from: string, name: string, emoji: string): void {
   const id = ++reactionId

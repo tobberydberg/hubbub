@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  Captions,
+  CircleDot,
   ExternalLink,
   Hand,
   LayoutGrid,
@@ -24,6 +26,8 @@ import {
   screenKey,
   sendReaction,
   setBackgroundBlur,
+  setCaptions,
+  setRecording,
   setCallExpanded,
   setHandRaised,
   setCallPoppedOut,
@@ -43,6 +47,8 @@ import { DeviceMenu } from './DeviceMenu'
 import { ScreenPicker } from './ScreenPicker'
 import { useElapsed } from './useElapsed'
 import { roomTitle } from '@renderer/lib/rooms'
+import { canModerate } from '@renderer/sync/moderation'
+import { Menu, MenuItem, anchorFrom, type Anchor } from '../common/Menu'
 
 // The expanded call: a grid of video tiles in place of the conversation, Mattermost-style, or in a
 // window of its own (popout). A shared screen takes the stage, with the people in a row below it.
@@ -209,6 +215,7 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
         <span className="cv-sub">
           {status} · {tiles.length} in call
         </span>
+        <RecordingBadge state={room?.callRecording} />
         <span className="cv-layout" role="group" aria-label="Layout">
           <button
             className={layout === 'grid' ? 'active' : ''}
@@ -342,6 +349,18 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
           </button>
         )}
         {reactions.length > 0 && <ReactionButton reactions={reactions} />}
+        {account?.caps?.config.call?.['live-transcription'] && (
+          <button
+            className={`cv-btn${call.captionsOn ? ' active' : ''}`}
+            title={call.captionsOn ? 'Turn live captions off' : 'Turn live captions on'}
+            onClick={() => void setCaptions(!call.captionsOn)}
+          >
+            <Captions size={20} />
+          </button>
+        )}
+        {account?.caps?.config.call?.recording && room && canModerate(room) && (
+          <RecordButton state={room.callRecording ?? 0} />
+        )}
         <button
           className="cv-btn"
           title="Add people to the call"
@@ -354,6 +373,17 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
           Leave
         </button>
       </div>
+
+      {call.captionsOn && call.captions.length > 0 && (
+        <div className="cv-captions" aria-live="polite">
+          {call.captions.slice(-3).map((c) => (
+            <p key={c.id} className={c.final ? '' : 'partial'}>
+              {c.name && <b>{c.name}: </b>}
+              {c.text}
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="cv-reactions" aria-live="polite">
         {call.reactions.map((r) => (
@@ -459,5 +489,57 @@ function ReactionButton({ reactions }: { reactions: string[] }) {
         </span>
       )}
     </span>
+  )
+}
+
+/** "● REC" while the call is recorded, for everyone in it */
+export function RecordingBadge({ state }: { state: number | undefined }) {
+  if (!state) return null
+  if (state === 5) return <span className="cv-rec failed">Recording failed</span>
+  const starting = state === 3 || state === 4
+  return (
+    <span
+      className={`cv-rec${starting ? ' starting' : ''}`}
+      title={state === 2 || state === 4 ? 'Audio only' : undefined}
+    >
+      <span className="cv-rec-dot" />
+      {starting ? 'Starting recording…' : 'REC'}
+    </span>
+  )
+}
+
+function RecordButton({ state }: { state: number }) {
+  const [menu, setMenu] = useState<Anchor | null>(null)
+  const recording = state >= 1 && state <= 4
+  return (
+    <>
+      <button
+        className={`cv-btn${recording ? ' rec' : ''}`}
+        title={recording ? 'Stop recording' : 'Record the call'}
+        onClick={(e) => (recording ? void setRecording(null) : setMenu(anchorFrom(e.currentTarget)))}
+      >
+        <CircleDot size={20} />
+      </button>
+      {menu && (
+        <Menu anchor={menu} onClose={() => setMenu(null)}>
+          <MenuItem
+            icon={<Video size={18} />}
+            label="Record video and audio"
+            onClick={() => {
+              setMenu(null)
+              void setRecording(1)
+            }}
+          />
+          <MenuItem
+            icon={<Mic size={18} />}
+            label="Record audio only"
+            onClick={() => {
+              setMenu(null)
+              void setRecording(2)
+            }}
+          />
+        </Menu>
+      )}
+    </>
   )
 }

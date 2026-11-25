@@ -7,9 +7,11 @@ import {
   Monitor,
   Palette,
   Phone,
+  RefreshCw,
+  Copy,
   SlidersHorizontal
 } from 'lucide-react'
-import type { DesktopSettings, TrustedCertificate } from '@shared/ipc'
+import type { DesktopSettings, ImapSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
 import { useApp } from '@renderer/store/app'
 import { setBackgroundBlur, switchCamera, switchMicrophone, switchSpeaker } from '@renderer/calls/call'
@@ -18,10 +20,15 @@ import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { useCalendar } from '@renderer/store/calendar'
 import { refreshCalendars } from '@renderer/sync/calendar'
 import {
+  forgetHandledMail,
   mailInvitationState,
+  scanMail,
+  setMailInvitationSource,
   setMailInvitations,
   type MailInvitationState
 } from '@renderer/sync/mail-invitations'
+import { clearMailDebug, mailDebugText, useMailDebug } from '@renderer/sync/mail-debug'
+import { copyText } from '@renderer/sync/actions'
 import { Modal, Toggle } from '../common/Modal'
 
 type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'calendar' | 'desktop' | 'advanced' | 'about'
@@ -325,6 +332,8 @@ function MailInvitations() {
   const order = useApp((s) => s.accountOrder)
   const accounts = useApp((s) => s.accounts)
   const enabled = usePrefs((s) => s.mailInvitations)
+  const sources = usePrefs((s) => s.mailInvitationSource)
+  const checks = usePrefs((s) => s.mailInvitationCheck)
   const [states, setStates] = useState<Record<string, MailInvitationState>>({})
   useEffect(() => {
     let alive = true
@@ -339,26 +348,309 @@ function MailInvitations() {
     <>
       {order.map((id) => {
         const st = states[id]
+        const source = sources[id] ?? 'nextcloud'
+        const on = !!enabled[id]
+        const check = checks[id]
+        const value = !on ? 'off' : source
         return (
-          <Row
-            key={id}
-            title={`Invitations from Nextcloud Mail${order.length > 1 ? ` · ${accounts[id]?.info.label}` : ''}`}
-            sub={
-              st && !st.available
-                ? st.reason
-                : 'Meeting invitations in your Nextcloud Mail inbox (from Microsoft Teams, Outlook, Google and others) are added to your default calendar, so you can see and answer them. The mails stay unread. Checked every few minutes while Hubbub runs.'
-            }
-          >
-            <Toggle
-              on={!!enabled[id] && st?.available !== false}
-              onChange={(v) => {
-                if (st?.available) setMailInvitations(id, v)
-              }}
-            />
-          </Row>
+          <div key={id}>
+            <Row
+              title={`Invitations from mail${order.length > 1 ? ` · ${accounts[id]?.info.label}` : ''}`}
+              sub="Meeting invitations in your inbox (from Microsoft Teams, Outlook, Google and others) are added to your default calendar, so you can see and answer them. The mails stay unread. Checked every few minutes while Hubbub runs."
+            >
+              <select
+                className="setting-select"
+                value={value}
+                onChange={(e) => {
+                  const v = e.target.value as 'off' | 'nextcloud' | 'imap'
+                  if (v !== 'off') setMailInvitationSource(id, v)
+                  setMailInvitations(id, v !== 'off' && (v === 'imap' || st?.available !== false))
+                }}
+              >
+                <option value="off">Off</option>
+                <option value="nextcloud" disabled={st?.available === false}>
+                  Nextcloud Mail{st?.available === false ? ' (not available)' : ''}
+                </option>
+                <option value="imap">Mail server (IMAP)</option>
+              </select>
+            </Row>
+            {on && source === 'nextcloud' && st?.available === false && (
+              <p className="imap-note error">{st.reason}</p>
+            )}
+            {source === 'imap' && on && <ImapSettingsForm accountId={id} />}
+            {on && <CheckNow accountId={id} check={check} />}
+          </div>
         )
       })}
     </>
+  )
+}
+
+/** "Check now", and what the last check found */
+function CheckNow({
+  accountId,
+  check
+}: {
+  accountId: string
+  check?: { at: number; error?: string; added?: number; changed?: number }
+}) {
+  const [busy, setBusy] = useState(false)
+  const [debug, setDebug] = useState(false)
+  const run = async (): Promise<void> => {
+    setBusy(true)
+    await scanMail(accountId)
+    setBusy(false)
+  }
+  const time = check
+    ? new Date(check.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : ''
+  const found = !check
+    ? ''
+    : [
+        check.added ? `${check.added} new ${check.added === 1 ? 'invitation' : 'invitations'}` : '',
+        check.changed ? `${check.changed} updated` : ''
+      ]
+        .filter(Boolean)
+        .join(', ') || 'nothing new'
+  return (
+    <div className="imap-check">
+      <button className="btn btn-tertiary small" disabled={busy} onClick={() => void run()}>
+        <RefreshCw size={14} className={busy ? 'spin' : undefined} /> {busy ? 'Checking…' : 'Check now'}
+      </button>
+      {check && !busy && (
+        <span className={`imap-note${check.error ? ' error' : ''}`}>
+          {check.error ? `Last check at ${time} failed: ${check.error}` : `Last checked ${time}: ${found}`}
+        </span>
+      )}
+      <button className="btn-link imap-debug-toggle" onClick={() => setDebug(!debug)}>
+        {debug ? 'Hide debug' : 'Show debug'}
+      </button>
+      {debug && <MailDebug accountId={accountId} busy={busy} onRun={() => void run()} />}
+    </div>
+  )
+}
+
+/** The last hour of what the checks did, to find out why an invitation didn't show up */
+function MailDebug({ accountId, busy, onRun }: { accountId: string; busy: boolean; onRun: () => void }) {
+  const entries = useMailDebug(accountId)
+  return (
+    <div className="mail-debug">
+      <div className="mail-debug-actions">
+        <span className="imap-note">What the checks did in the last hour, newest first.</span>
+        <button
+          className="btn btn-tertiary small"
+          disabled={!entries.length}
+          onClick={() => void copyText(mailDebugText(entries), 'Debug log copied')}
+        >
+          <Copy size={14} /> Copy
+        </button>
+        <button
+          className="btn btn-tertiary small"
+          disabled={busy}
+          title="Forget which mails were handled and check all mail of the last 30 days again. Invitations already in the calendar are recognised and not added twice."
+          onClick={() => {
+            forgetHandledMail(accountId)
+            onRun()
+          }}
+        >
+          <RefreshCw size={14} /> Look at all mail again
+        </button>
+        <button
+          className="btn btn-tertiary small"
+          disabled={!entries.length}
+          onClick={() => clearMailDebug(accountId)}
+        >
+          Clear
+        </button>
+      </div>
+      <div className="mail-debug-list">
+        {entries.length === 0 ? (
+          <div className="imap-note">Nothing yet. Press Check now.</div>
+        ) : (
+          entries.map((e, i) => (
+            <div key={`${e.at}-${i}`} className={`mail-debug-entry${e.level === 'error' ? ' error' : ''}`}>
+              <span className="mail-debug-time">{new Date(e.at).toLocaleTimeString()}</span>
+              <span>{e.text}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+const DEFAULT_PORT = { tls: 993, starttls: 143, none: 143 } as const
+
+/** The mail server to read invitations from; the password is kept in the system keychain */
+function ImapSettingsForm({ accountId }: { accountId: string }) {
+  const [config, setConfig] = useState<ImapSettings>({
+    host: '',
+    port: 993,
+    security: 'tls',
+    username: '',
+    folder: 'INBOX'
+  })
+  const [hasPassword, setHasPassword] = useState(false)
+  const [password, setPassword] = useState('')
+  const [folders, setFolders] = useState<string[]>([])
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    void window.hubbub.imap.get(accountId).then((c) => {
+      if (!c) return
+      const { hasPassword: has, ...settings } = c
+      setConfig(settings)
+      setHasPassword(has)
+    })
+  }, [accountId])
+
+  const change = (patch: Partial<ImapSettings>): void => {
+    setConfig((c) => ({ ...c, ...patch }))
+    setDirty(true)
+    setStatus(null)
+  }
+  const ready = !!config.host.trim() && !!config.username.trim() && (hasPassword || !!password)
+  const pass = password ? password : undefined
+
+  const test = async (): Promise<boolean> => {
+    setBusy('test')
+    const r = await window.hubbub.imap.test(accountId, config, pass)
+    setBusy(null)
+    if (r.ok) {
+      setFolders(r.folders ?? [])
+      setStatus({ ok: true, text: `Connected. Hubbub can read ${config.folder || 'INBOX'}.` })
+    } else {
+      setStatus({ ok: false, text: r.error ?? 'Couldn’t connect' })
+    }
+    return r.ok
+  }
+
+  const save = async (): Promise<void> => {
+    if (!(await test())) return
+    setBusy('save')
+    try {
+      await window.hubbub.imap.set(accountId, config, pass)
+      setHasPassword(true)
+      setPassword('')
+      setDirty(false)
+      setStatus({ ok: true, text: 'Saved. Checking for invitations now.' })
+      void scanMail(accountId)
+    } catch (err) {
+      setStatus({ ok: false, text: err instanceof Error ? err.message : String(err) })
+    }
+    setBusy(null)
+  }
+
+  return (
+    <div className="imap-form">
+      <div className="imap-grid">
+        <label className="imap-host">
+          <span>Server</span>
+          <input
+            className="input"
+            placeholder="imap.example.com"
+            value={config.host}
+            onChange={(e) => change({ host: e.target.value })}
+          />
+        </label>
+        <label>
+          <span>Security</span>
+          <select
+            className="input"
+            value={config.security}
+            onChange={(e) => {
+              const security = e.target.value as ImapSettings['security']
+              change({ security, port: DEFAULT_PORT[security] })
+            }}
+          >
+            <option value="tls">SSL/TLS</option>
+            <option value="starttls">STARTTLS</option>
+            <option value="none">None (unencrypted)</option>
+          </select>
+        </label>
+        <label>
+          <span>Port</span>
+          <input
+            className="input"
+            type="number"
+            value={config.port}
+            onChange={(e) => change({ port: Number(e.target.value) })}
+          />
+        </label>
+        <label className="imap-wide">
+          <span>User name</span>
+          <input
+            className="input"
+            autoComplete="off"
+            value={config.username}
+            onChange={(e) => change({ username: e.target.value })}
+          />
+        </label>
+        <label className="imap-wide">
+          <span>Password</span>
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            placeholder={hasPassword ? 'Saved; type to change' : ''}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              setDirty(true)
+              setStatus(null)
+            }}
+          />
+        </label>
+        <label className="imap-wide">
+          <span>Folder</span>
+          {folders.length ? (
+            <select
+              className="input"
+              value={config.folder}
+              onChange={(e) => change({ folder: e.target.value })}
+            >
+              {!folders.includes(config.folder) && <option value={config.folder}>{config.folder}</option>}
+              {folders.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className="input"
+              value={config.folder}
+              onChange={(e) => change({ folder: e.target.value })}
+            />
+          )}
+        </label>
+      </div>
+      {config.security === 'none' && (
+        <p className="imap-note error">
+          Your password and mail go over the network unencrypted. Use this only for a server on your own
+          computer or network.
+        </p>
+      )}
+      <div className="imap-actions">
+        <button className="btn btn-tertiary small" disabled={!ready || !!busy} onClick={() => void test()}>
+          {busy === 'test' ? 'Connecting…' : 'Test connection'}
+        </button>
+        <button
+          className="btn btn-primary small"
+          disabled={!ready || !!busy || (!dirty && hasPassword)}
+          onClick={() => void save()}
+        >
+          {busy === 'save' ? 'Saving…' : 'Save'}
+        </button>
+        {status && <span className={`imap-status${status.ok ? ' ok' : ' error'}`}>{status.text}</span>}
+      </div>
+      <p className="imap-note">
+        Hubbub opens the folder read-only, so nothing changes on the server and mails stay unread. The
+        password is kept in your system’s keychain.
+      </p>
+    </div>
   )
 }
 

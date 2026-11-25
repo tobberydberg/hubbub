@@ -8,6 +8,7 @@ import {
   Minimize2,
   MessageSquare,
   Search,
+  Sparkles,
   X
 } from 'lucide-react'
 import {
@@ -36,6 +37,11 @@ import { markThreadSeen, useThreads } from '@renderer/sync/threads'
 import { Avatar } from '../common/Avatar'
 import { openProfileCard } from '../common/ProfileCard'
 import { SharedItemsPanel } from './SharedItems'
+import { MemberActions, ModerationSection } from './Moderation'
+import { BreakoutSection } from './BreakoutRooms'
+import { SummaryPanel } from './Summary'
+import { useHasAiTask } from '@renderer/sync/ai'
+import { canModerate } from '@renderer/sync/moderation'
 import { notePresence } from '@renderer/sync/status'
 import { Composer } from '../channel/Composer'
 import { MessageList } from '../channel/MessageList'
@@ -67,6 +73,7 @@ export function Rhs() {
       : undefined
   )
   const threads = useThreads(account)
+  const canSummarizeThreads = useHasAiTask(rhs?.accountId, 'core:text2text:summary')
   if (!rhs || !account) return null
   const thread =
     rhs.type === 'thread' ? threads.find((t) => t.token === rhs.token && t.rootId === rhs.rootId) : undefined
@@ -81,13 +88,17 @@ export function Rhs() {
           ? 'Info'
           : rhs.type === 'shared'
             ? 'Shared items'
-            : rhs.type === 'scheduled'
-              ? 'Scheduled messages'
-              : rhs.type === 'reminders'
-                ? 'Upcoming reminders'
-                : rhs.type === 'event'
-                  ? 'Event'
-                  : 'Search Results'
+            : rhs.type === 'summary'
+              ? rhs.rootId
+                ? 'Thread summary'
+                : 'Summary'
+              : rhs.type === 'scheduled'
+                ? 'Scheduled messages'
+                : rhs.type === 'reminders'
+                  ? 'Upcoming reminders'
+                  : rhs.type === 'event'
+                    ? 'Event'
+                    : 'Search Results'
   const sub =
     rhs.type === 'search'
       ? `"${rhs.query}" on ${account.info.label}`
@@ -133,6 +144,19 @@ export function Rhs() {
           {sub && <div className="sub">{sub}</div>}
         </div>
         {thread && <FollowButton accountId={account.info.id} thread={thread} />}
+        {rhs.type === 'thread' && canSummarizeThreads && (
+          <button
+            className="icon-btn"
+            title="Summarize this thread with AI"
+            onClick={() =>
+              setApp({
+                rhs: { type: 'summary', accountId: account.info.id, token: rhs.token, rootId: rhs.rootId }
+              })
+            }
+          >
+            <Sparkles size={16} />
+          </button>
+        )}
         <button
           className="icon-btn"
           title={expanded ? 'Collapse' : 'Expand'}
@@ -156,6 +180,15 @@ export function Rhs() {
       {rhs.type === 'members' && room && <MembersPanel account={account} room={room} />}
       {rhs.type === 'info' && room && <InfoPanel account={account} room={room} />}
       {rhs.type === 'shared' && room && <SharedItemsPanel accountId={account.info.id} token={room.token} />}
+      {rhs.type === 'summary' && room && (
+        <SummaryPanel
+          key={`${rhs.token}/${rhs.fromMessageId}/${rhs.rootId}`}
+          accountId={account.info.id}
+          token={room.token}
+          fromMessageId={rhs.fromMessageId}
+          rootId={rhs.rootId}
+        />
+      )}
       {rhs.type === 'search' && <SearchPanel account={account} rhs={rhs} />}
       {rhs.type === 'scheduled' && <ScheduledPanel account={account} token={rhs.token} />}
       {rhs.type === 'reminders' && <RemindersPanel account={account} />}
@@ -264,6 +297,7 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
 
+  const [reload, setReload] = useState(0)
   useEffect(() => {
     let cancelled = false
     talk(accountId)
@@ -276,7 +310,7 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
     return () => {
       cancelled = true
     }
-  }, [accountId, room.token])
+  }, [accountId, room.token, reload])
 
   if (error) return <div className="empty-state">{error}</div>
   if (!members) {
@@ -291,6 +325,7 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
     .filter((m) => !q || m.displayName.toLowerCase().includes(q) || m.actorId.toLowerCase().includes(q))
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
   const online = shown.filter((m) => m.status && m.status !== 'offline' && m.status !== 'invisible')
+  const moderator = canModerate(room)
   const offline = shown.filter((m) => !online.includes(m))
 
   const row = (m: Participant) => (
@@ -338,6 +373,9 @@ function MembersPanel({ account, room }: { account: AccountState; room: Room }) 
         >
           <MessageSquare size={16} />
         </button>
+      )}
+      {moderator && !(m.actorType === 'users' && m.actorId === account.user?.id) && (
+        <MemberActions account={account} room={room} member={m} onChanged={() => setReload((r) => r + 1)} />
       )}
     </div>
   )
@@ -419,6 +457,12 @@ function InfoPanel({ account, room }: { account: AccountState; room: Room }) {
       {hasFeature(account, 'schedule-meeting') && room.type !== RoomType.NoteToSelf && (
         <UpcomingMeetings account={account} room={room} />
       )}
+      {canModerate(room) && <ModerationSection account={account} room={room} />}
+      {canModerate(room) &&
+        room.objectType !== 'room' &&
+        room.type !== RoomType.OneToOne &&
+        hasFeature(account, 'breakout-rooms-v1') &&
+        !!account.caps?.config.call?.['breakout-rooms'] && <BreakoutSection account={account} room={room} />}
       <div className="info-block">
         <div className="label">Link</div>
         <div style={{ display: 'flex', gap: 8 }}>

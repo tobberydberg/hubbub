@@ -62,6 +62,20 @@ export interface ActiveCall {
   reactions: CallReaction[]
   selfStreamVersion: number
   participants: Record<string, CallParticipant>
+  /** Live captions are on for us (needs the live_transcription app on the server) */
+  captionsOn: boolean
+  /** The latest live captions, oldest first */
+  captions: Caption[]
+}
+
+export interface Caption {
+  id: number
+  /** The speaker's signaling session */
+  sessionId: string
+  name: string
+  text: string
+  /** False while the speaker is still in the middle of the sentence */
+  final: boolean
 }
 
 export interface IncomingCall {

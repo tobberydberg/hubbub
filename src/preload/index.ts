@@ -21,6 +21,13 @@ const api: HubbubApi = {
   upload: (req) => invoke('dav:upload', req),
   calendars: (accountId) => invoke('dav:calendars', accountId),
   folder: (accountId, path) => invoke('dav:folder', accountId, path),
+  imap: {
+    get: (accountId) => invoke('imap:get', accountId),
+    set: (accountId, settings, password) => invoke('imap:set', accountId, settings, password),
+    remove: (accountId) => invoke('imap:remove', accountId),
+    test: (accountId, settings, password) => invoke('imap:test', accountId, settings, password),
+    invitations: (accountId, opts) => invoke('imap:invitations', accountId, opts)
+  },
   addressBooks: (accountId) => invoke('dav:addressbooks', accountId),
   contacts: (accountId, href) => invoke('dav:contacts', accountId, href),
   calendarEvents: (accountId, href, start, end, unanswered) =>

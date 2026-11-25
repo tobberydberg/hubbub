@@ -14,7 +14,8 @@
   },
   "private": true,
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "imapflow": "2.11.0"
   },
   "devDependencies": {
     "@electron/osx-sign": "1.3.3",

@@ -74,17 +74,50 @@ function useShortcuts(): void {
           selectAccount(id)
         }
       }
+      // Select All outside a text field selects the draft in the message box, not the whole window
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isEditable(e.target)) {
+        const box = messageBox()
+        if (box) {
+          e.preventDefault()
+          box.focus()
+          box.select()
+        }
+      }
       if (e.key === 'Escape' && !useApp.getState().modal && useApp.getState().rhs) {
         const target = e.target as HTMLElement
         if (target.tagName !== 'TEXTAREA' && target.tagName !== 'INPUT') closeRhs()
       }
     }
+    // The message box typed in last, for Select All
+    const onFocus = (e: FocusEvent): void => {
+      const t = e.target as HTMLElement | null
+      if (t?.matches?.('.composer textarea')) lastBox = t as HTMLTextAreaElement
+    }
     window.addEventListener('keydown', onKey)
+    window.addEventListener('focusin', onFocus)
     return () => {
       off()
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('focusin', onFocus)
     }
   }, [])
+}
+
+let lastBox: HTMLTextAreaElement | null = null
+
+function isEditable(target: EventTarget | null): boolean {
+  const t = target as HTMLElement | null
+  return (
+    !!t &&
+    (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)
+  )
+}
+
+/** The message box to select in: the one typed in last if it's still there, else the conversation's */
+function messageBox(): HTMLTextAreaElement | null {
+  if (useApp.getState().modal) return null
+  if (lastBox?.isConnected && !lastBox.disabled) return lastBox
+  return document.querySelector<HTMLTextAreaElement>('.center .composer textarea:not(:disabled)')
 }
 
 function Center() {

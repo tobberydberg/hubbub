@@ -92,7 +92,8 @@ class RoomPresence {
           participants: () => undefined,
           reset: () => this.sessions.clear(),
           connection: () => undefined,
-          closed: () => void this.reset()
+          closed: () => void this.reset(),
+          switchTo: () => undefined
         }
       )
       await this.signaling.connect()

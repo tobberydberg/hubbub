@@ -121,6 +121,39 @@ export interface TrustedCertificate {
   trustedAt: number
 }
 
+/** A mail server to read meeting invitations from */
+export interface ImapSettings {
+  host: string
+  port: number
+  /** tls: encrypted from the start (993), starttls: upgraded (143), none: unencrypted */
+  security: 'tls' | 'starttls' | 'none'
+  username: string
+  /** The folder to look in, usually INBOX */
+  folder: string
+}
+
+export interface ImapConfig extends ImapSettings {
+  hasPassword: boolean
+}
+
+export interface ImapTestResult {
+  ok: boolean
+  error?: string
+  /** The server's folders, when signing in worked */
+  folders?: string[]
+}
+
+/** A message with calendar parts; id is "uidvalidity:uid", stable for the folder */
+export interface ImapInvitation {
+  id: string
+  subject?: string
+  /** ms */
+  date?: number
+  /** Who it was sent to (To and Cc) */
+  to?: string[]
+  parts: { method: string; ics: string }[]
+}
+
 export interface HubbubApi {
   platform: NodeJS.Platform
   accounts: {
@@ -146,6 +179,15 @@ export interface HubbubApi {
   calendars(accountId: string): Promise<string>
   /** A folder of the user's files (e.g. "/Documents"), as the raw WebDAV response */
   folder(accountId: string, path: string): Promise<string>
+  /** Reading invitations from a mail server (per Hubbub server account); the password stays in main */
+  imap: {
+    get(accountId: string): Promise<ImapConfig | null>
+    /** password undefined keeps the stored one */
+    set(accountId: string, settings: ImapSettings, password?: string): Promise<void>
+    remove(accountId: string): Promise<void>
+    test(accountId: string, settings: ImapSettings, password?: string): Promise<ImapTestResult>
+    invitations(accountId: string, opts: { sinceDays: number; skip: string[] }): Promise<ImapInvitation[]>
+  }
   /** The user's address books, as the raw CardDAV response */
   addressBooks(accountId: string): Promise<string>
   /** The contacts of one address book (its path from addressBooks), as the raw CardDAV response */

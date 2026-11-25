@@ -50,7 +50,11 @@ interface PrefsState {
   /** Hubbub adds invitations from the Nextcloud Mail inbox to the calendar, per account */
   mailInvitations: Record<string, boolean>
   /** Mail messages whose invitations were handled, per account */
-  mailInvitesSeen: Record<string, number[]>
+  mailInvitesSeen: Record<string, (number | string)[]>
+  /** Where invitations come from, per server: Nextcloud Mail, or a mail server directly (IMAP) */
+  mailInvitationSource: Record<string, 'nextcloud' | 'imap'>
+  /** The last check for invitations per server, and what went wrong */
+  mailInvitationCheck: Record<string, { at: number; error?: string; added?: number; changed?: number }>
   /** The calendar new events go into, per account (its href) */
   defaultCalendars: Record<string, string>
   /** A strip in the chat sidebar for the next meeting with a call, from 10 minutes before */
@@ -67,6 +71,8 @@ interface PrefsState {
   rhsWidth: number | null
   /** The folder "Share from Nextcloud Files" opened last, per server */
   filesPickerFolder: Record<string, string>
+  /** The language messages were translated to last */
+  translateTo: string | null
   /** Call view: everyone the same size, or the speaker large */
   callLayout: 'grid' | 'speaker'
   lastAccountId: string | null
@@ -110,6 +116,8 @@ export const usePrefs = create<PrefsState>()(
       defaultCalendars: {},
       mailInvitations: {},
       mailInvitesSeen: {},
+      mailInvitationSource: {},
+      mailInvitationCheck: {},
       meetingStrip: true,
       startWithCamera: false,
       startMuted: false,
@@ -118,6 +126,7 @@ export const usePrefs = create<PrefsState>()(
       callLayout: 'grid',
       rhsWidth: null,
       filesPickerFolder: {},
+      translateTo: null,
       lastAccountId: null,
       lastRooms: {},
 

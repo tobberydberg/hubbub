@@ -131,6 +131,51 @@ export interface Room {
   objectType?: string
   /** For 'event': "start#end" in unix seconds */
   objectId?: string
+  /** Permissions everyone has unless set per person (see Permission) */
+  defaultPermissions?: number
+  /** 0 off, 1 the lobby is on: only moderators get in */
+  lobbyState?: number
+  /** Unix seconds when the lobby opens by itself, or 0 */
+  lobbyTimer?: number
+  /** Seconds after which messages are deleted, or 0 */
+  messageExpiration?: number
+  /** 0 only participants, 1 users of the server, 2 also guests */
+  listable?: number
+  /** 0 everyone may mention @all, 1 only moderators */
+  mentionPermissions?: number
+  /** 0 none, 1 video, 2 audio, 3 starting video, 4 starting audio, 5 failed */
+  callRecording?: number
+  /** 0 none, 1 automatic, 2 manual, 3 free (see BreakoutMode) */
+  breakoutRoomMode?: number
+  /** 0 stopped, 1 started, 2 someone asked for help */
+  breakoutRoomStatus?: number
+}
+
+/** Participant permissions (bits) */
+export const Permission = {
+  Custom: 1,
+  StartCall: 2,
+  JoinCall: 4,
+  IgnoreLobby: 8,
+  Audio: 16,
+  Video: 32,
+  Screen: 64,
+  Chat: 128,
+  React: 256
+} as const
+
+/** Everything a participant can be allowed (without Custom) */
+export const ALL_PERMISSIONS = 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256
+
+export interface Ban {
+  id: number
+  actorType: string
+  actorId: string
+  bannedType: string
+  bannedId: string
+  bannedDisplayName: string
+  bannedTime: number
+  internalNote: string
 }
 
 /** Participant in-call flags */
@@ -183,6 +228,9 @@ export interface Participant {
   actorId: string
   displayName: string
   participantType: number
+  /** What this person may do (see Permission); attendeePermissions when set for them */
+  permissions?: number
+  attendeePermissions?: number
   inCall: number
   status?: string
   statusIcon?: string | null
@@ -208,9 +256,28 @@ export interface AutocompleteResult {
 
 export interface TalkCapabilities {
   features: string[]
+  /** Features of this server only, not of federated ones (e.g. chat-summary-api) */
+  'features-local'?: string[]
   config: {
     attachments?: { allowed?: boolean; folder?: string; 'conversation-subfolders'?: boolean }
-    chat?: { 'max-length'?: number; 'read-privacy'?: number }
+    chat?: {
+      'max-length'?: number
+      'read-privacy'?: number
+      'has-translation-providers'?: boolean
+      'has-translation-task-providers'?: boolean
+      /** Unread messages from which Talk offers a summary */
+      'summary-threshold'?: number
+    }
+    call?: {
+      enabled?: boolean
+      recording?: boolean
+      /** 0 off, 1 required, 2 optional (moderators decide per conversation) */
+      'recording-consent'?: number
+      'breakout-rooms'?: boolean
+      'live-transcription'?: boolean
+      'live-translation'?: boolean
+      [key: string]: unknown
+    }
     conversations?: { 'can-create'?: boolean }
     [key: string]: unknown
   }

@@ -21,12 +21,40 @@ const UPCOMING_HOURS = 24
 
 const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
+const addresses = new Map<string, string[]>()
+
+/**
+ * Your email addresses as your calendar knows them: the main one and the additional ones from your
+ * Nextcloud personal settings. Invitations to these are yours, and answers go out from them.
+ */
+export function myAddresses(accountId: string): string[] {
+  const email = useApp.getState().accounts[accountId]?.user?.email
+  const known = addresses.get(accountId) ?? []
+  return [...new Set([...(email ? [email.toLowerCase()] : []), ...known])]
+}
+
+/** Loads your calendar addresses (once per server and session, again after a failure) */
+async function loadMyAddresses(accountId: string): Promise<void> {
+  if (addresses.has(accountId)) return
+  const userId = useApp.getState().accounts[accountId]?.info.userId
+  if (!userId) return
+  try {
+    const list = await window.hubbub.calendarAddresses(accountId, userId)
+    addresses.set(
+      accountId,
+      list.map((a) => a.replace(/^mailto:/i, '').toLowerCase()).filter((a) => a.includes('@'))
+    )
+  } catch {
+    // The main address is enough for now
+  }
+}
+
 function context(accountId: string, calendarHref: string): Parameters<typeof parseEvents>[1] {
   const account = useApp.getState().accounts[accountId]
   return {
     calendarHref,
     serverUrl: account?.info.serverUrl ?? '',
-    myEmails: account?.user?.email ? [account.user.email] : []
+    myEmails: myAddresses(accountId)
   }
 }
 
@@ -131,6 +159,7 @@ export function openInvitations(accountId: string): CalendarEvent[] {
 
 /** Brings one server's calendars up to date for the date and view on screen. */
 export async function refreshCalendars(accountId: string, force = false): Promise<void> {
+  await loadMyAddresses(accountId)
   const calendars = await loadCalendarList(accountId)
   if (!calendars) return
   const state = useCalendar.getState()

@@ -45,6 +45,8 @@ export interface SignalingHandlers {
   connection(state: 'connected' | 'reconnecting'): void
   /** The server ended our session (kicked, conversation deleted, …) */
   closed(reason: string): void
+  /** Continue in another conversation (breakout rooms starting or ending) */
+  switchTo(token: string): void
 }
 
 interface ServerMessage {
@@ -262,6 +264,9 @@ export class HpbSignaling {
     else if (ev.target === 'room' && ev.type === 'leave') this.on.leave(ev.leave as string[])
     else if (ev.target === 'participants' && ev.type === 'update') {
       this.on.participants(ev.update as Parameters<SignalingHandlers['participants']>[0])
+    } else if (ev.target === 'room' && ev.type === 'switchto') {
+      const roomid = (ev.switchto as { roomid?: string } | undefined)?.roomid
+      if (roomid) this.on.switchTo(roomid)
     } else if (ev.target === 'roomlist' && ev.type === 'disinvite') {
       this.on.closed('disinvited')
     }

@@ -40,7 +40,7 @@
   reminders in the account menu.
 - **Send later and silently.** The arrow next to Send schedules a message or sends it without notifying
   anyone. Scheduled messages can be sent now, moved or deleted.
-- **Invitations from mail.** Meeting invitations in your Nextcloud Mail inbox, for example from Microsoft
+- **Invitations from mail.** Meeting invitations in your Nextcloud Mail inbox or straight from your IMAP server, for example from Microsoft
   Teams, are added to your calendar (the mails stay unread), and everything you haven't answered is listed with
   Yes, Maybe and No.
 - **Calendar.** Your Nextcloud calendars next to the chat, by day, week, month or as an agenda, kept in sync
@@ -56,6 +56,10 @@
 - **Out of office** with a message and a stand-in, shown to people who write to you, and theirs to you.
 - **Share from Nextcloud Files** and **shared items** per conversation.
 - **Contacts** from Nextcloud Contacts when inviting people, and on their cards.
+- **Moderation and breakout rooms.** Lobby, read-only, permissions, moderators, banning, and breakout rooms.
+- **Recording and live captions** in calls, when the server has them.
+- **AI from your Nextcloud.** Summaries of what you missed and of threads, translating messages, and writing
+  help in the message box, with whatever AI your server has set up.
 - **Your status and profile cards.** Set Online, Away, Busy, Do not disturb or Invisible with a message like
   "🏡 Working remotely" that clears itself when you choose. Click anyone's name or picture for their card: title,
   company, contact details, status, local time and when they were last active.

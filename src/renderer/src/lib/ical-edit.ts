@@ -301,6 +301,9 @@ export function setAnswerIcs(ics: string, myEmails: string[], answer: Answer, re
     vevents = [instance]
   }
   for (const vevent of vevents) {
+    // An invitation from mail may still have the organizer marked as scheduling it themselves (see
+    // mail-invitations.ts); without the mark Nextcloud mails the answer to the organizer
+    vevent.getFirstProperty('organizer')?.removeParameter('schedule-agent')
     for (const attendee of vevent.getAllProperties('attendee')) {
       if (!mine.has(emailOf(attendee))) continue
       attendee.setParameter('partstat', answer)

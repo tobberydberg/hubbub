@@ -19,6 +19,7 @@ import {
   setVideo,
   toggleScreenShare
 } from '@renderer/calls/call'
+import { RecordingBadge } from './CallView'
 import { openRoom, selectAccount } from '@renderer/sync/actions'
 import { useApp } from '@renderer/store/app'
 import { updateCall, useCall, type ActiveCall } from '@renderer/store/call'
@@ -71,7 +72,10 @@ function Widget({ call }: { call: ActiveCall }) {
           <span className={`cw-dot ${call.status}`} />
           <span className="cw-text">
             <span className="cw-title">{room ? roomTitle(room, account?.user?.displayname) : 'Call'}</span>
-            <span className="cw-sub">{status}</span>
+            <span className="cw-sub">
+              {status}
+              {room?.callRecording ? <RecordingBadge state={room.callRecording} /> : null}
+            </span>
           </span>
         </button>
         <button

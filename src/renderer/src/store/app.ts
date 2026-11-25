@@ -74,6 +74,8 @@ export type RhsState =
   | { type: 'members'; accountId: string; token: string }
   | { type: 'info'; accountId: string; token: string }
   | { type: 'shared'; accountId: string; token: string }
+  /** An AI summary of the conversation from a message on, or of a thread */
+  | { type: 'summary'; accountId: string; token: string; fromMessageId?: number; rootId?: number }
   | { type: 'search'; accountId: string; query: string }
   | { type: 'reminders'; accountId: string }
   | { type: 'scheduled'; accountId: string; token: string }
@@ -217,7 +219,7 @@ export function useActiveRoom(): Room | undefined {
 }
 
 export function hasFeature(account: AccountState | undefined, feature: string): boolean {
-  return !!account?.caps?.features.includes(feature)
+  return !!account?.caps?.features.includes(feature) || !!account?.caps?.['features-local']?.includes(feature)
 }
 
 let toastId = 0

@@ -1,5 +1,16 @@
 import { useMemo, useState, type DragEvent } from 'react'
-import { BellOff, CalendarDays, ExternalLink, Files, Info, Star, Users } from 'lucide-react'
+import {
+  BellOff,
+  CalendarDays,
+  DoorClosed,
+  ExternalLink,
+  Files,
+  Info,
+  Sparkles,
+  Star,
+  Users,
+  X
+} from 'lucide-react'
 import { NotificationLevel, RoomType, type Room } from '@shared/talk-types'
 import { formatEventRange } from '@renderer/lib/events'
 import { isCollapsedReply } from '@renderer/lib/messages'
@@ -11,6 +22,10 @@ import { useThreads, type ThreadEntry } from '@renderer/sync/threads'
 import { CallButton } from '../calls/CallButton'
 import { RoomIcon } from '../sidebar/Sidebar'
 import { AbsenceBanner } from './AbsenceBanner'
+import { BreakoutBanner } from '../rhs/BreakoutRooms'
+import { inLobby } from '@renderer/sync/moderation'
+import { canSummarizeChat } from '@renderer/sync/ai'
+import { formatAt } from '@renderer/lib/time'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { PinnedBar } from './PinnedBar'
@@ -38,6 +53,7 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
   const pending = useMemo(() => chat.pending.filter((p) => !p.threadId), [chat.pending])
 
   const readOnly = room.readOnly === 1
+  const lobby = inLobby(room)
   const placeholder =
     room.type === RoomType.OneToOne
       ? `Write to ${room.displayName}`
@@ -69,7 +85,19 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
     >
       <ChannelHeader account={account} room={room} />
       <PinnedBar accountId={account.info.id} room={room} />
-      {!chat.loaded ? (
+      <BreakoutBanner account={account} room={room} />
+      {!lobby && <SummaryBar account={account} room={room} />}
+      {lobby ? (
+        <div className="empty-state lobby">
+          <DoorClosed size={40} />
+          <h2>You’re in the lobby</h2>
+          <p>
+            {room.lobbyTimer
+              ? `The conversation opens ${formatAt(room.lobbyTimer).replace(/^(Today|Tomorrow)/, (d) => d.toLowerCase())}, or when a moderator lets everyone in.`
+              : 'A moderator will let you in. You can wait here; the conversation opens by itself.'}
+          </p>
+        </div>
+      ) : !chat.loaded ? (
         <div className="empty-state">
           <div className="spinner" />
         </div>
@@ -100,7 +128,9 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
       {room.type === RoomType.OneToOne && (
         <AbsenceBanner accountId={accountId} userId={room.name} name={room.displayName} />
       )}
-      <Composer accountId={accountId} token={room.token} placeholder={placeholder} disabled={readOnly} />
+      {!lobby && (
+        <Composer accountId={accountId} token={room.token} placeholder={placeholder} disabled={readOnly} />
+      )}
       {dragOver && <div className="drop-overlay">Drop files to upload to {room.displayName}</div>}
     </main>
   )
@@ -180,6 +210,17 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
           <Users size={18} />
         </button>
       )}
+      {canSummarizeChat(accountId) && room.type !== RoomType.NoteToSelf && (
+        <button
+          className={`icon-btn${rhs?.type === 'summary' ? ' active' : ''}`}
+          title={
+            room.unreadMessages ? 'Summarize what you missed, with AI' : 'Summarize the last day, with AI'
+          }
+          onClick={() => openSummary(accountId, room)}
+        >
+          <Sparkles size={18} />
+        </button>
+      )}
       <button
         className={`icon-btn${rhs?.type === 'shared' ? ' active' : ''}`}
         title="Shared items"
@@ -202,5 +243,37 @@ function ChannelHeader({ account, room }: { account: AccountState; room: Room })
         <ExternalLink size={18} />
       </button>
     </header>
+  )
+}
+
+/** The AI summary of what you missed, or of the last day when you're up to date */
+function openSummary(accountId: string, room: Room): void {
+  let from = room.unreadMessages > 0 ? room.lastReadMessage : 0
+  if (!from) {
+    const chat = useApp.getState().chats[chatKey(accountId, room.token)]
+    const dayAgo = Date.now() / 1000 - 86_400
+    const first = chat?.ids.find((id) => (chat.byId[id]?.timestamp ?? 0) >= dayAgo)
+    from = first ? first - 1 : (chat?.ids[0] ?? 1) - 1
+  }
+  setApp({ rhs: { type: 'summary', accountId, token: room.token, fromMessageId: Math.max(0, from) } })
+}
+
+/** Many unread messages: offer Talk's summary of them, as Talk on the web does */
+function SummaryBar({ account, room }: { account: AccountState; room: Room }) {
+  const accountId = account.info.id
+  const [hidden, setHidden] = useState(false)
+  const threshold = account.caps?.config.chat?.['summary-threshold'] ?? 100
+  if (hidden || !canSummarizeChat(accountId) || room.unreadMessages < threshold) return null
+  return (
+    <div className="summary-bar">
+      <Sparkles size={16} />
+      <span>{room.unreadMessages} unread messages</span>
+      <button className="ev-btn" onClick={() => openSummary(accountId, room)}>
+        Summarize them
+      </button>
+      <button className="icon-btn small" title="Hide" onClick={() => setHidden(true)}>
+        <X size={15} />
+      </button>
+    </div>
   )
 }
