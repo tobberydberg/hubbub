@@ -49,6 +49,7 @@ import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
 import { openProfileCard } from '../common/ProfileCard'
 import { Translation } from './Translation'
+import { ReactionChip } from './ReactionChip'
 import { canTranslate } from '@renderer/sync/ai'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 import { Attachments } from './Attachments'
@@ -312,14 +313,16 @@ export const Post = memo(function Post(props: PostProps) {
         {Object.keys(rx).length > 0 && (
           <div className="reactions">
             {Object.entries(rx).map(([e, count]) => (
-              <button
+              <ReactionChip
                 key={e}
-                className={`reaction${msg.reactionsSelf?.includes(e) ? ' self' : ''}`}
-                onClick={() => void toggleReaction(accountId, token, msg, e)}
-              >
-                <span className="emoji">{e}</span>
-                {count}
-              </button>
+                accountId={accountId}
+                token={token}
+                messageId={msg.id}
+                emoji={e}
+                count={count}
+                self={!!msg.reactionsSelf?.includes(e)}
+                onToggle={() => void toggleReaction(accountId, token, msg, e)}
+              />
             ))}
             <button
               className="reaction reaction-add"

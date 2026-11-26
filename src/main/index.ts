@@ -48,9 +48,11 @@ import {
 } from './desktop'
 import {
   abortRequest,
+  addAccountEmail,
   davAddressBooks,
   davCalendars,
   davContacts,
+  davExportCalendar,
   davFolder,
   davEvents,
   davMkcol,
@@ -60,6 +62,7 @@ import {
   davUpload,
   ocsRequest
 } from './http'
+import { openIcs, saveIcs } from './ics-files'
 import { getImapSettings, imapInvitations, removeImapSettings, setImapSettings, testImap } from './imap'
 import { handleMediaProtocol, registerMediaScheme } from './media'
 import { buildMenu } from './menu'
@@ -232,6 +235,11 @@ function registerIpc(): void {
     updateAccount(id, patch)
   )
   handle('accounts:reorder', (ids: string[]) => reorderAccounts(ids))
+  handle('accounts:addEmail', (id: string, email: string, password?: string) => {
+    const account = getAccount(id)
+    if (!account) throw new Error('Unknown account')
+    return addAccountEmail(getCredentials(id), account.userId, email, password)
+  })
   handle('accounts:remove', (id: string) => {
     removeImapSettings(id)
     return removeAccount(id)
@@ -257,6 +265,13 @@ function registerIpc(): void {
   handle('imap:invitations', (accountId: string, opts: { sinceDays: number; skip: string[] }) =>
     imapInvitations(accountId, opts)
   )
+  handle('dav:export', async (accountId: string, href: string, name: string) => {
+    const account = getAccount(accountId)
+    if (!account) throw new Error('Unknown account')
+    const text = await davExportCalendar(getCredentials(accountId), account.userId, href)
+    return saveIcs(mainWindow, name, text)
+  })
+  handle('files:openIcs', () => openIcs(mainWindow))
   handle('dav:folder', (accountId: string, path: string) => {
     const account = getAccount(accountId)
     if (!account) throw new Error('Unknown account')

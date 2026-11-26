@@ -170,6 +170,15 @@ export interface HubbubApi {
     update(id: string, patch: Partial<Pick<AccountInfo, 'label' | 'color'>>): Promise<AccountInfo[]>
     reorder(ids: string[]): Promise<AccountInfo[]>
     remove(id: string): Promise<AccountInfo[]>
+    /**
+     * Adds an email address to the account. Nextcloud may want the password confirmed: then
+     * needsPassword is set, and the call can be repeated with the login password (used once, not kept).
+     */
+    addEmail(
+      id: string,
+      email: string,
+      password?: string
+    ): Promise<{ ok: boolean; needsPassword: boolean; error?: string }>
   }
   ocs<T = unknown>(req: OcsRequest): Promise<OcsResponse<T>>
   abortRequest(requestId: string): Promise<void>
@@ -177,6 +186,10 @@ export interface HubbubApi {
   upload(req: UploadRequest): Promise<UploadResult>
   /** The user's calendars, as the raw CalDAV response */
   calendars(accountId: string): Promise<string>
+  /** Saves a whole calendar as an .ics file where the user chooses; the path, or null when cancelled */
+  exportCalendar(accountId: string, href: string, name: string): Promise<string | null>
+  /** Lets the user pick an .ics file and reads it; null when cancelled */
+  openIcsFile(): Promise<{ name: string; text: string } | null>
   /** A folder of the user's files (e.g. "/Documents"), as the raw WebDAV response */
   folder(accountId: string, path: string): Promise<string>
   /** Reading invitations from a mail server (per Hubbub server account); the password stays in main */

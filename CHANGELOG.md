@@ -6,6 +6,52 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- In calls with many people, the "+N more" tile shows everyone: the grid then keeps tiles at a usable size and
+  scrolls, and "Show fewer" goes back.
+- The call view has a side panel with who is in the call (raised hands first, with microphone and camera state) and
+  the conversation's chat, to read and write without leaving the call, also in the call's own window.
+- Hovering a reaction under a message shows who reacted.
+- Your email addresses in Settings → Calendar, where an alias can be added to your Nextcloud account (Nextcloud asks
+  for your password once; it isn't kept). A meeting organized from an address that looks like yours but that
+  Nextcloud doesn't know shows "Is … you?" with the same button; once added, you can edit it and Nextcloud sends
+  your changes to the invitees. Your aliases in Nextcloud Mail count as yours too, with the same button, since
+  Nextcloud only emails answers and meeting changes from your account's addresses. An address the account already
+  has is simply taken.
+- Import and export of calendars as .ics files, from the calendar's sidebar: export saves a whole calendar where you
+  choose; import adds a file's events to the calendar you pick, leaves out events already in it, and sends nobody
+  anything, also for meetings with invitees (editing one later sends your change as usual).
+- Invitation options for meetings with invitees: "Invitees can forward the invitation" and "Invitees can propose a
+  new time", as Outlook and Teams respect them.
+- Conversations joined through their link (meetings you weren't invited to): Talk takes you out of them when you
+  leave, so they vanish from your list everywhere, although the conversation and its chat remain. Hubbub remembers
+  them: Cmd+K finds them ("you left · open again") and opens them again with the chat. While you're in one, a bar
+  offers to join permanently (when the conversation is open to everyone on the server) or to ask the moderators to
+  add you. A calendar meeting's Open chat and Join call now join through the link in Hubbub instead of opening the
+  browser.
+- Keeping meeting conversations: Talk deletes the conversations of calendar meetings some time after the meeting
+  (28 days by default) and instant meetings after a day without activity, chat and all. Their Info panel says when,
+  and moderators get **Keep this conversation** (and a bar in the conversation when it's due soon), so Talk doesn't
+  delete it; it stays under Meetings in Hubbub.
+- Asking to become a moderator during a call, from the call's people panel. Moderators using Hubbub get the request
+  in the call with Make moderator and Not now; when nobody answers within a minute, it can be asked in the chat,
+  mentioning the moderators so they're notified on any device.
+
+### Changed
+
+- The bell closes the notification panel again, and opening a notification dismisses it (in Nextcloud too, so it's
+  gone on your other devices).
+- Editing a meeting you organize from another of your addresses keeps that address as the organizer, instead of
+  adding your main address as a second organizer.
+- The mediapipe library for background blur is updated to 1.2.3.
+
+### Fixed
+
+- Invitations that reached an alias before Hubbub knew it as yours list you twice: at the alias, and at your main
+  address, which Hubbub added so you could answer. Once the alias became yours, they showed up as unanswered again
+  although you had answered. Your answer now counts, and you're listed once.
+
 ## [0.6.0] - 2026-11-25
 
 Your day at a glance, a notification center, out of office, files and shared items, contacts, moderation and

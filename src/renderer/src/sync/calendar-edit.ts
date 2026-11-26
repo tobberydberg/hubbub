@@ -109,7 +109,9 @@ export interface SaveRequest {
 /** Creates or changes an event. Resolves with false when it couldn't be saved (a toast says why). */
 export async function saveEvent(accountId: string, req: SaveRequest): Promise<boolean> {
   const a = account(accountId)
-  const organizer = organizerFor(accountId)
+  // A meeting you organized from another of your addresses stays organized from that one
+  const was = req.existing?.organizer
+  const organizer = was?.isMe && was.email ? { name: was.name, email: was.email } : organizerFor(accountId)
   try {
     if (req.draft.attendees.length && !organizer) {
       throw new Error('Your account has no email address, which invitations are sent from')

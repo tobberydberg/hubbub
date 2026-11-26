@@ -4,6 +4,8 @@ import { setCallPoppedOut } from '@renderer/calls/call'
 import { useApp } from '@renderer/store/app'
 import { useCall } from '@renderer/store/call'
 import { CallView } from './CallView'
+import { PortalDocument } from '../common/Menu'
+import { setCallWindow } from '@renderer/calls/popout-window'
 
 // The popped-out call: a child window of this one that React renders into through a portal. Being
 // the same page, it shows the call's media streams directly, and nothing is reconnected when the
@@ -48,6 +50,7 @@ export function CallPopout() {
       return
     }
     popout = win
+    setCallWindow(win)
     adoptStyles(win.document)
     win.document.body.className = 'popout-body'
     const el = win.document.createElement('div')
@@ -60,6 +63,7 @@ export function CallPopout() {
     return () => {
       win.removeEventListener('pagehide', onClose)
       if (popout === win) popout = null
+      setCallWindow(null)
       win.close()
     }
   }, [])
@@ -68,5 +72,13 @@ export function CallPopout() {
     if (popout) popout.document.title = title ? `${title} – Hubbub call` : 'Hubbub call'
   }, [title, container])
 
-  return container ? createPortal(<CallView popout />, container) : null
+  return container
+    ? createPortal(
+        // Menus and pickers of the call window open in it, not in the main window
+        <PortalDocument.Provider value={container.ownerDocument}>
+          <CallView popout />
+        </PortalDocument.Provider>,
+        container
+      )
+    : null
 }

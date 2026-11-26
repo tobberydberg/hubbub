@@ -1,7 +1,7 @@
 import { InCall, type Room, type SignalingSettings } from '@shared/talk-types'
 import { talk } from '@renderer/api/talk'
 import { setApp, showToast, useApp, type AccountState } from '@renderer/store/app'
-import { updateCall, useCall, type CallParticipant } from '@renderer/store/call'
+import { updateCall, useCall, type CallParticipant, type ModeratorRequest } from '@renderer/store/call'
 import { usePrefs } from '@renderer/store/prefs'
 import { setTyping, typingKey } from '@renderer/store/typing'
 import { holdPresence, presenceYielded } from '@renderer/sync/presence'
@@ -11,7 +11,8 @@ import { HpbSignaling, type CallUpdate, type JoinedSession, type SignalData } fr
 import type { BackgroundBlur } from './blur'
 import { openCameraTrack, openMicrophoneStream } from './devices'
 import { SpeakingDetector } from './speaking'
-import { openRoom } from '@renderer/sync/actions'
+import { openRoom, sendMessage } from '@renderer/sync/actions'
+import { canModerate } from '@renderer/sync/moderation'
 import { getSync } from '@renderer/sync/engine'
 
 // A call in one conversation: the conversation session on the Nextcloud server, the connection to
@@ -527,6 +528,32 @@ class CallSession {
           handRaisedAt: payload.state ? Number(payload.timestamp) || Date.now() : 0
         })
         break
+      case 'hubbub-moderator-request': {
+        // Only moderators answer; a request from a guest can't be granted (they have no user id)
+        const room = useApp.getState().accounts[this.accountId]?.rooms[this.token]
+        const userId = typeof payload.userId === 'string' ? payload.userId : ''
+        if (!userId || !canModerate(room) || from === this.selfId) break
+        const name = typeof payload.name === 'string' && payload.name ? payload.name : userId
+        updateCall((c) => {
+          c.moderatorRequests = [
+            ...c.moderatorRequests.filter((r) => r.userId !== userId),
+            { sessionId: from, userId, name, at: Date.now() }
+          ]
+        })
+        break
+      }
+      case 'hubbub-moderator-answer': {
+        if (useCall.getState().active?.moderatorAsk?.state !== 'waiting') break
+        const granted = payload.granted === true
+        updateCall((c) => void (c.moderatorAsk = { state: granted ? 'granted' : 'declined', at: Date.now() }))
+        if (granted) {
+          showToast('You’re now a moderator')
+          void getSync(this.accountId)?.refreshRooms()
+        } else {
+          showToast('A moderator answered: not now')
+        }
+        break
+      }
       case 'transcript':
         // Live captions: { speakerSessionId, message, langId, final }
         if (typeof data.message === 'string' && typeof data.speakerSessionId === 'string') {
@@ -724,6 +751,24 @@ class CallSession {
   setHandRaised(state: boolean): void {
     updateCall((c) => void (c.handRaised = state))
     for (const id of this.remotes) this.sendTo(id, 'raiseHand', { state, timestamp: Date.now() })
+  }
+
+  /** Asks the moderators in the conversation to make us one */
+  askToModerate(): void {
+    const me = this.account.user
+    for (const sessionId of this.names.keys()) {
+      if (sessionId === this.selfId) continue
+      this.signaling?.sendToSession(sessionId, {
+        to: sessionId,
+        roomType: 'video',
+        type: 'hubbub-moderator-request',
+        payload: { userId: me?.id, name: me?.displayname }
+      })
+    }
+  }
+
+  answerModeratorRequest(sessionId: string, granted: boolean): void {
+    this.sendTo(sessionId, 'hubbub-moderator-answer', { granted })
   }
 
   react(emoji: string): void {
@@ -1052,6 +1097,10 @@ export async function startCall(
       reactions: [],
       selfStreamVersion: 0,
       participants: {},
+      side: null,
+      showAllTiles: false,
+      moderatorRequests: [],
+      moderatorAsk: null,
       captionsOn: false,
       captions: []
     }
@@ -1130,6 +1179,72 @@ export function setHandRaised(state: boolean): void {
 
 export function sendReaction(emoji: string): void {
   current?.react(emoji)
+}
+
+const ASK_TIMEOUT = 60_000
+
+/**
+ * Asks the moderators to make us a moderator. Talk has no such request, so it goes to the others'
+ * Hubbub over the call connection; when nobody answers within a minute, asking in the chat is offered.
+ */
+export function askToBecomeModerator(): void {
+  if (!current) return
+  const at = Date.now()
+  updateCall((c) => void (c.moderatorAsk = { state: 'waiting', at }))
+  current.askToModerate()
+  setTimeout(() => {
+    const ask = useCall.getState().active?.moderatorAsk
+    if (ask?.state === 'waiting' && ask.at === at)
+      updateCall((c) => void (c.moderatorAsk = { state: 'unanswered', at }))
+  }, ASK_TIMEOUT)
+}
+
+/** Asks in the conversation's chat, mentioning its moderators, for those not using Hubbub */
+export async function askModeratorsInChat(): Promise<void> {
+  const active = useCall.getState().active
+  if (!active) return
+  const selfId = useApp.getState().accounts[active.accountId]?.user?.id
+  try {
+    const members = await talk(active.accountId).participants(active.token)
+    const moderators = members.filter(
+      (m) =>
+        m.actorType === 'users' &&
+        m.actorId !== selfId &&
+        (m.participantType === 1 || m.participantType === 2)
+    )
+    const mentions = moderators.map((m) => `@"${m.actorId}"`).join(' ')
+    await sendMessage(
+      active.accountId,
+      active.token,
+      `Could you make me a moderator of this conversation? ${mentions}`.trim()
+    )
+    updateCall((c) => void (c.moderatorAsk = { state: 'asked-in-chat', at: Date.now() }))
+  } catch (err) {
+    showToast(`The request couldn’t be sent: ${errorText(err)}`, 'error')
+  }
+}
+
+/** A moderator's answer to someone asking to become a moderator */
+export async function answerModeratorRequest(req: ModeratorRequest, grant: boolean): Promise<void> {
+  const active = useCall.getState().active
+  if (!active) return
+  updateCall((c) => void (c.moderatorRequests = c.moderatorRequests.filter((r) => r.userId !== req.userId)))
+  if (grant) {
+    try {
+      const api = talk(active.accountId)
+      const member = (await api.participants(active.token)).find(
+        (m) => m.actorType === 'users' && m.actorId === req.userId
+      )
+      if (!member) throw new Error(`${req.name} isn’t in the conversation`)
+      await api.promoteModerator(active.token, member.attendeeId)
+      showToast(`${req.name} is now a moderator`)
+      void getSync(active.accountId)?.refreshRooms()
+    } catch (err) {
+      showToast(`${req.name} couldn’t be made a moderator: ${errorText(err)}`, 'error')
+      return
+    }
+  }
+  current?.answerModeratorRequest(req.sessionId, grant)
 }
 
 const REACTION_SHOWN = 4000

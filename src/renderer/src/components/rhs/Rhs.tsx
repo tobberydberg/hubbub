@@ -40,6 +40,7 @@ import { SharedItemsPanel } from './SharedItems'
 import { MemberActions, ModerationSection } from './Moderation'
 import { BreakoutSection } from './BreakoutRooms'
 import { SummaryPanel } from './Summary'
+import { RetentionInfo } from './RetentionInfo'
 import { useHasAiTask } from '@renderer/sync/ai'
 import { canModerate } from '@renderer/sync/moderation'
 import { notePresence } from '@renderer/sync/status'
@@ -457,6 +458,7 @@ function InfoPanel({ account, room }: { account: AccountState; room: Room }) {
       {hasFeature(account, 'schedule-meeting') && room.type !== RoomType.NoteToSelf && (
         <UpcomingMeetings account={account} room={room} />
       )}
+      <RetentionInfo account={account} room={room} />
       {canModerate(room) && <ModerationSection account={account} room={room} />}
       {canModerate(room) &&
         room.objectType !== 'room' &&

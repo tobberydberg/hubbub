@@ -14,13 +14,16 @@ const api: HubbubApi = {
       invoke('accounts:addWithAppPassword', url, login, pw, label),
     update: (id, patch) => invoke('accounts:update', id, patch),
     reorder: (ids) => invoke('accounts:reorder', ids),
-    remove: (id) => invoke('accounts:remove', id)
+    remove: (id) => invoke('accounts:remove', id),
+    addEmail: (id, email, password) => invoke('accounts:addEmail', id, email, password)
   },
   ocs: (req) => invoke('ocs:request', req),
   abortRequest: (requestId) => invoke('ocs:abort', requestId),
   upload: (req) => invoke('dav:upload', req),
   calendars: (accountId) => invoke('dav:calendars', accountId),
   folder: (accountId, path) => invoke('dav:folder', accountId, path),
+  exportCalendar: (accountId, href, name) => invoke('dav:export', accountId, href, name),
+  openIcsFile: () => invoke('files:openIcs'),
   imap: {
     get: (accountId) => invoke('imap:get', accountId),
     set: (accountId, settings, password) => invoke('imap:set', accountId, settings, password),

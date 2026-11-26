@@ -5,6 +5,17 @@ export type ThemeName = 'denim' | 'sapphire' | 'quartz' | 'indigo' | 'onyx' | 's
 export type SortMode = 'recent' | 'alpha'
 
 /** Custom sidebar category kept locally, used when the server has no conversation-tags support. */
+/** What Hubbub remembers of a conversation you joined through its link */
+export interface VisitedRoom {
+  token: string
+  name: string
+  displayName: string
+  type: number
+  objectType?: string
+  objectId?: string
+  lastActivity: number
+}
+
 export interface LocalCategory {
   id: string
   name: string
@@ -73,6 +84,8 @@ interface PrefsState {
   filesPickerFolder: Record<string, string>
   /** The language messages were translated to last */
   translateTo: string | null
+  /** Conversations joined through their link, per server (Talk drops you from them when you leave) */
+  visitedRooms: Record<string, VisitedRoom[]>
   /** Call view: everyone the same size, or the speaker large */
   callLayout: 'grid' | 'speaker'
   lastAccountId: string | null
@@ -127,6 +140,7 @@ export const usePrefs = create<PrefsState>()(
       rhsWidth: null,
       filesPickerFolder: {},
       translateTo: null,
+      visitedRooms: {},
       lastAccountId: null,
       lastRooms: {},
 

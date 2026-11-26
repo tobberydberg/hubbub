@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Plus, Video } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, Plus, Upload, Video } from 'lucide-react'
 import type { Answer, CalendarEvent, CalendarInfo } from '@renderer/lib/caldav'
 import {
   addMonths,
@@ -53,6 +53,20 @@ export function CalendarSidebar() {
         >
           <ExternalLink size={14} /> Open Nextcloud Calendar
         </button>
+        <div className="cal-side-io">
+          <button
+            className="cal-side-link"
+            onClick={() => setApp({ modal: { type: 'calendar-io', accountId, mode: 'import' } })}
+          >
+            <Upload size={14} /> Import .ics…
+          </button>
+          <button
+            className="cal-side-link"
+            onClick={() => setApp({ modal: { type: 'calendar-io', accountId, mode: 'export' } })}
+          >
+            <Download size={14} /> Export .ics…
+          </button>
+        </div>
       </div>
       <CallWidget />
     </aside>

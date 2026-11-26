@@ -23,6 +23,8 @@ import { CallButton } from '../calls/CallButton'
 import { RoomIcon } from '../sidebar/Sidebar'
 import { AbsenceBanner } from './AbsenceBanner'
 import { BreakoutBanner } from '../rhs/BreakoutRooms'
+import { KeepBar } from './KeepBar'
+import { SelfJoinedBar } from './SelfJoinedBar'
 import { inLobby } from '@renderer/sync/moderation'
 import { canSummarizeChat } from '@renderer/sync/ai'
 import { formatAt } from '@renderer/lib/time'
@@ -87,6 +89,8 @@ export function ChannelView({ account, room }: { account: AccountState; room: Ro
       <PinnedBar accountId={account.info.id} room={room} />
       <BreakoutBanner account={account} room={room} />
       {!lobby && <SummaryBar account={account} room={room} />}
+      <KeepBar account={account} room={room} />
+      <SelfJoinedBar account={account} room={room} />
       {lobby ? (
         <div className="empty-state lobby">
           <DoorClosed size={40} />

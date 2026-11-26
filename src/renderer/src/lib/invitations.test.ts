@@ -107,6 +107,7 @@ describe('mail invitations', () => {
     const stored = parseMailInvitation(teams(0), 'REQUEST')!.ics
     const marked = scheduledByClient(stored, true)
     expect(marked).toMatch(/ORGANIZER[^:]*SCHEDULE-AGENT=CLIENT/)
+    expect(marked).toMatch(/ATTENDEE[^:]*SCHEDULE-AGENT=CLIENT/)
     const clean = scheduledByClient(marked, false)
     expect(clean).not.toContain('SCHEDULE-AGENT')
     expect(read(clean)[0].myAnswer).toBe('NEEDS-ACTION')

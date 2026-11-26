@@ -15,6 +15,7 @@ import {
   SmilePlus,
   Sparkles,
   SquareUser,
+  Users,
   UserPlus,
   Video,
   VideoOff
@@ -36,7 +37,7 @@ import {
   setVisibleVideos,
   toggleScreenShare
 } from '@renderer/calls/call'
-import { gridShape, pickTiles } from '@renderer/calls/layout'
+import { allTilesShape, gridShape, pickTiles } from '@renderer/calls/layout'
 import { usePrefs } from '@renderer/store/prefs'
 import { openRoom, selectAccount } from '@renderer/sync/actions'
 import { hasFeature, useApp } from '@renderer/store/app'
@@ -48,6 +49,8 @@ import { ScreenPicker } from './ScreenPicker'
 import { useElapsed } from './useElapsed'
 import { roomTitle } from '@renderer/lib/rooms'
 import { canModerate } from '@renderer/sync/moderation'
+import { CallSide, type SidePerson } from './CallSide'
+import { ModeratorRequestsBar } from './ModeratorRequests'
 import { Menu, MenuItem, anchorFrom, type Anchor } from '../common/Menu'
 
 // The expanded call: a grid of video tiles in place of the conversation, Mattermost-style, or in a
@@ -58,6 +61,8 @@ const MAX_STRIP_TILES = 8
 /** Width of the tiles in the row below a stage (see .cv-strip in app.css) */
 const STRIP_TILE_WIDTH = 192
 const GAP = 8
+/** Smallest tile when everyone is shown; below it the grid scrolls */
+const MIN_ALL_TILE_WIDTH = 200
 
 interface Tile {
   id: string
@@ -155,8 +160,22 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
   }, [presentation, layout, tiles])
 
   const staged = presentation !== null || speaker !== null
+  const raisedHands = tiles.filter((t) => t.handRaised).length
+  const sidePeople = useMemo<SidePerson[]>(
+    () =>
+      tiles.map((t) => ({
+        ...t,
+        handRaisedAt: t.self ? undefined : call.participants[t.id]?.handRaisedAt
+      })),
+    [tiles, call.participants]
+  )
   const stripTiles = speaker ? tiles.filter((t) => t.id !== speaker.id) : tiles
-  const { shown, hidden } = pickTiles(stripTiles, staged ? MAX_STRIP_TILES : MAX_TILES)
+  const showAll = call.showAllTiles
+  const { shown, hidden } = pickTiles(
+    stripTiles,
+    showAll ? Number.POSITIVE_INFINITY : staged ? MAX_STRIP_TILES : MAX_TILES
+  )
+  const trimmed = stripTiles.length > (staged ? MAX_STRIP_TILES : MAX_TILES)
   const count = shown.length + (hidden ? 1 : 0)
 
   const presenting = staged
@@ -173,7 +192,10 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
     observer.observe(el)
     return () => observer.disconnect()
   }, [presenting])
-  const { cols, tileWidth } = gridShape(count, size.width, size.height, GAP)
+  // Everyone at once: tiles keep a usable size and the grid scrolls
+  const { cols, tileWidth, scrolling } = showAll
+    ? allTilesShape(count, size.width, size.height, GAP, MIN_ALL_TILE_WIDTH)
+    : { ...gridShape(count, size.width, size.height, GAP), scrolling: false }
 
   // Only download the video that is on screen, in the quality its tile needs
   const layers: Record<string, number> = {}
@@ -199,10 +221,14 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
         <TileView key={t.id} tile={t} accountId={call.accountId} />
       ))}
       {hidden > 0 && (
-        <div className="cv-tile cv-more">
+        <button
+          className="cv-tile cv-more"
+          title="Show everyone"
+          onClick={() => updateCall((c) => void (c.showAllTiles = true))}
+        >
           <span>+{hidden}</span>
-          <small>more in the call</small>
-        </div>
+          <small>more in the call · show all</small>
+        </button>
       )}
     </>
   )
@@ -216,6 +242,11 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
           {status} · {tiles.length} in call
         </span>
         <RecordingBadge state={room?.callRecording} />
+        {showAll && trimmed && (
+          <button className="cv-fewer" onClick={() => updateCall((c) => void (c.showAllTiles = false))}>
+            Showing everyone · Show fewer
+          </button>
+        )}
         <span className="cv-layout" role="group" aria-label="Layout">
           <button
             className={layout === 'grid' ? 'active' : ''}
@@ -230,6 +261,24 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
             onClick={() => usePrefs.getState().set({ callLayout: 'speaker' })}
           >
             <SquareUser size={16} />
+          </button>
+        </span>
+        <span className="cv-layout" role="group" aria-label="Side panel">
+          <button
+            className={call.side === 'people' ? 'active' : ''}
+            title={call.side === 'people' ? 'Hide who is in the call' : 'Who is in the call'}
+            onClick={() => updateCall((c) => void (c.side = c.side === 'people' ? null : 'people'))}
+          >
+            <Users size={16} />
+            {raisedHands > 0 && <span className="cv-side-badge">{raisedHands}</span>}
+          </button>
+          <button
+            className={call.side === 'chat' ? 'active' : ''}
+            title={call.side === 'chat' ? 'Hide the chat' : 'Chat'}
+            onClick={() => updateCall((c) => void (c.side = c.side === 'chat' ? null : 'chat'))}
+          >
+            <MessageSquare size={16} />
+            {call.side !== 'chat' && (room?.unreadMessages ?? 0) > 0 && <span className="cv-side-dot" />}
           </button>
         </span>
         {popout ? (
@@ -269,29 +318,35 @@ function View({ call, popout }: { call: ActiveCall; popout: boolean }) {
         )}
       </div>
 
-      {presentation ? (
-        <>
-          <div className="cv-stage">
-            <ScreenStage presentation={presentation} />
-          </div>
-          <div className="cv-strip">{people}</div>
-        </>
-      ) : speaker ? (
-        <>
-          <div className="cv-stage">
-            <TileView tile={speaker} accountId={call.accountId} stage />
-          </div>
-          <div className="cv-strip">{people}</div>
-        </>
-      ) : (
-        <div
-          className="cv-grid"
-          ref={gridRef}
-          style={{ gridTemplateColumns: `repeat(${cols}, ${tileWidth}px)`, gap: GAP }}
-        >
-          {people}
+      <ModeratorRequestsBar call={call} />
+      <div className="cv-main">
+        <div className="cv-area">
+          {presentation ? (
+            <>
+              <div className="cv-stage">
+                <ScreenStage presentation={presentation} />
+              </div>
+              <div className="cv-strip">{people}</div>
+            </>
+          ) : speaker ? (
+            <>
+              <div className="cv-stage">
+                <TileView tile={speaker} accountId={call.accountId} stage />
+              </div>
+              <div className="cv-strip">{people}</div>
+            </>
+          ) : (
+            <div
+              className={`cv-grid${scrolling ? ' scrolling' : ''}`}
+              ref={gridRef}
+              style={{ gridTemplateColumns: `repeat(${cols}, ${tileWidth}px)`, gap: GAP }}
+            >
+              {people}
+            </div>
+          )}
         </div>
-      )}
+        {call.side && <CallSide call={call} people={sidePeople} />}
+      </div>
 
       <div className="cv-controls">
         <span className="cv-split">

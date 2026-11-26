@@ -186,7 +186,10 @@ export function parseEvents(xml: string, ctx: ParseContext): CalendarEvent[] {
       const organizerProp = vevent.getFirstProperty('organizer')
       const organizer = organizerProp ? person(organizerProp) : undefined
       const attendees = vevent.getAllProperties('attendee').map(person)
-      const me = attendees.find((a) => a.isMe)
+      // You can be among the invitees twice: at an alias, and at your main address, added when the
+      // invitation came to an alias your calendar didn't know yet. The answer you gave counts.
+      const asMe = attendees.filter((a) => a.isMe)
+      const me = asMe.find((a) => a.answer && a.answer !== 'NEEDS-ACTION') ?? asMe[0]
 
       const reminders: number[] = []
       for (const alarm of vevent.getAllSubcomponents('valarm')) {

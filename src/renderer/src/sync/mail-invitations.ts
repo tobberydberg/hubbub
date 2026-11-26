@@ -4,6 +4,7 @@ import {
   cancelledInvitation,
   includesMe,
   myAnswerIn,
+  organizedByMe,
   revives,
   scheduledByClient,
   withMe,
@@ -16,7 +17,7 @@ import {
 import { showToast, useApp } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
-import { myAddresses, refreshCalendars } from './calendar'
+import { calendarAddresses, myAddresses, refreshCalendars } from './calendar'
 import { logMailDebug } from './mail-debug'
 
 // Invitations that arrive by mail (from Microsoft Teams, Outlook, Google, …) in the calendar.
@@ -145,9 +146,12 @@ interface Me {
   emails: string[]
 }
 
-/** The address the mail reached you at when your calendar knows it, else your main address */
+/**
+ * The address the mail reached you at when your calendar knows it, else your main address. Not a
+ * Nextcloud Mail alias your calendar doesn't know: Nextcloud wouldn't send your answer from it.
+ */
 function meFor(accountId: string, recipients: string[]): Me | null {
-  const emails = myAddresses(accountId)
+  const emails = calendarAddresses(accountId)
   const a = useApp.getState().accounts[accountId]
   const email = recipients.map((r) => r.toLowerCase()).find((r) => emails.includes(r)) ?? emails[0]
   if (!email) return null
@@ -250,7 +254,7 @@ function failure(status: number): string {
  * the answer hasn't changed then, so again nothing is sent, and later answers reach the organizer.
  * Resolves with the status of the first save.
  */
-async function saveQuietly(
+export async function saveQuietly(
   accountId: string,
   href: string,
   ics: string,
@@ -263,6 +267,9 @@ async function saveQuietly(
     etag
   })
   if (res.status < 200 || res.status >= 300) return res.status
+  // A meeting you organize keeps the mark: taking it off would make Nextcloud invite everyone.
+  // Editing it in Hubbub takes it off, and then the invitees get your change as they should.
+  if (organizedByMe(ics, myAddresses(accountId))) return res.status
   const now = await window.hubbub.calendarObject(accountId, { method: 'GET', href })
   if (now.status === 200) {
     // Left marked if this fails: answering in Hubbub takes the mark off

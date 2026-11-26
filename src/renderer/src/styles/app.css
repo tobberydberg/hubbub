@@ -6529,3 +6529,392 @@ textarea.input {
   flex: none;
   color: var(--cc-56);
 }
+
+/* Who reacted, above a reaction */
+.reaction-tip {
+  position: fixed;
+  z-index: 260;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1f2329;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: var(--elevation-3, 0 4px 12px rgba(0, 0, 0, 0.25));
+  pointer-events: none;
+}
+.reaction-tip-emoji {
+  font-size: 20px;
+}
+.reaction-tip-sub {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- Call view: everyone, people and chat ---------- */
+
+.cv-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.cv-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cv-grid.scrolling {
+  overflow-y: auto;
+  align-content: start;
+}
+button.cv-more {
+  color: inherit;
+  cursor: pointer;
+}
+button.cv-more:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.cv-fewer {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cv-fewer:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.cv-layout + .cv-layout {
+  margin-left: 0;
+}
+.cv-layout button {
+  position: relative;
+}
+.cv-side-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--away-indicator);
+  color: #111;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+.cv-side-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mention-bg, #fff);
+}
+.cv-side {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 12px 12px 0 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--center-channel-bg);
+  color: var(--center-channel-color);
+}
+.cv-side-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 0 12px;
+  border-bottom: 1px solid var(--cc-08);
+}
+.cv-side-tabs button[role='tab'] {
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cc-64);
+}
+.cv-side-tabs button.active {
+  color: var(--button-bg);
+  border-bottom-color: var(--button-bg);
+}
+.cv-side-close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--cc-64);
+}
+.cv-side-close:hover {
+  background: var(--cc-08);
+}
+.cv-people {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.cv-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+}
+.cv-person.speaking .avatar {
+  box-shadow: 0 0 0 2px var(--online-indicator);
+  border-radius: 50%;
+}
+.cv-person-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+.cv-person-icons {
+  display: flex;
+  gap: 6px;
+  color: var(--cc-56);
+}
+.cv-person-icons .hand {
+  color: var(--away-indicator);
+}
+.cv-person-icons .muted {
+  color: var(--dnd-indicator);
+}
+.cv-people-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--link-color);
+}
+.cv-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cv-chat .composer-wrap {
+  padding: 0 12px 12px;
+}
+
+/* ---------- Asking to become a moderator ---------- */
+
+.mod-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 20px 0;
+}
+.mod-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+}
+.mod-request > svg {
+  color: var(--away-indicator);
+}
+.mod-request-text {
+  flex: 1;
+  min-width: 140px;
+}
+.mod-request .ev-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.mod-requests.compact {
+  padding: 8px 8px 0;
+}
+.mod-requests.compact .mod-request {
+  background: var(--cc-08);
+  color: var(--center-channel-color);
+}
+.ask-moderate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 14px 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--cc-08);
+}
+.ask-moderate .mod-sub {
+  margin: 0;
+}
+.ask-moderate .ev-btn {
+  height: 30px;
+  font-size: 13px;
+}
+
+/* ---------- Keeping meeting conversations ---------- */
+
+.keep-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--cc-08);
+  background: color-mix(in srgb, var(--away-indicator) 12%, transparent);
+  font-size: 13px;
+}
+.keep-bar > svg {
+  flex: none;
+  color: var(--away-indicator);
+}
+.keep-text {
+  flex: 1;
+  min-width: 0;
+}
+.keep-when {
+  color: var(--cc-64);
+}
+.keep-bar .ev-btn {
+  height: 30px;
+  padding: 0 12px;
+}
+.invite-options {
+  margin-top: 6px;
+}
+.invite-options .help {
+  margin: 4px 0 0;
+}
+.alias-hint {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--button-bg-08);
+  font-size: 13px;
+}
+.alias-hint > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--button-bg);
+}
+.alias-hint p {
+  margin: 0 0 8px;
+}
+.alias-hint .ev-btn {
+  height: 30px;
+  font-size: 13px;
+}
+.my-address-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.my-address {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--cc-08);
+  font-size: 12px;
+}
+.my-address-mail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.my-address-mail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.my-address-note {
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.my-address-add {
+  display: flex;
+  gap: 8px;
+  max-width: 420px;
+}
+.my-address-add .input {
+  height: 32px;
+  font-size: 13px;
+}
+.add-address {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.add-address.asking {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  max-width: 420px;
+}
+.add-address-row {
+  display: flex;
+  gap: 8px;
+}
+.add-address-row .input {
+  height: 32px;
+  font-size: 13px;
+}
+.add-address-note {
+  font-size: 12px;
+  color: var(--cc-64);
+}
+.add-address-error {
+  font-size: 12px;
+  color: var(--error-text, var(--dnd-indicator));
+}
+
+/* ---------- Calendar import and export ---------- */
+
+.cal-side-io {
+  display: flex;
+  gap: 4px;
+}
+.cal-side-io .cal-side-link {
+  flex: 1;
+}
+.io-choose {
+  height: 36px;
+}
+.io-file {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.io-result p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.io-failed {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--error-text, var(--dnd-indicator));
+}

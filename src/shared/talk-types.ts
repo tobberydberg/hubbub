@@ -278,7 +278,13 @@ export interface TalkCapabilities {
       'live-translation'?: boolean
       [key: string]: unknown
     }
-    conversations?: { 'can-create'?: boolean }
+    conversations?: {
+      'can-create'?: boolean
+      /** Days after the meeting that Talk deletes an event conversation (0: never) */
+      'retention-event'?: number
+      /** Days without activity after which Talk deletes an instant meeting (0: never) */
+      'retention-instant-meetings'?: number
+    }
     [key: string]: unknown
   }
   version?: string

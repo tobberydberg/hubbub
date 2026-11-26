@@ -67,6 +67,9 @@ export function NotificationCenter() {
       <button
         className={`gh-icon-btn notif-bell${anchor ? ' active' : ''}`}
         title={list.length ? `${list.length} notifications` : 'Notifications'}
+        // Pressing the bell is outside the panel, which would close it just before the click opens it
+        // again: the bell itself opens and closes it
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => setAnchor(anchor ? null : anchorFrom(e.currentTarget, 'right'))}
       >
         <Bell size={18} />

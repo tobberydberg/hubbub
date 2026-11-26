@@ -18,7 +18,8 @@ import { setBackgroundBlur, switchCamera, switchMicrophone, switchSpeaker } from
 import { deviceLabel, playTestSound, useMediaDevices } from '@renderer/calls/devices'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { useCalendar } from '@renderer/store/calendar'
-import { refreshCalendars } from '@renderer/sync/calendar'
+import { mailOnlyAddresses, refreshCalendars, reloadMyAddresses } from '@renderer/sync/calendar'
+import { AddAddress } from '../calendar/AddAddress'
 import {
   forgetHandledMail,
   mailInvitationState,
@@ -168,6 +169,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           {tab === 'calendar' && (
             <>
               <DefaultCalendars />
+              <MyAddresses />
               <MailInvitations />
               <Row title="Show week numbers" sub="In the small month, and in the week and month views">
                 <Toggle
@@ -650,6 +652,83 @@ function ImapSettingsForm({ accountId }: { accountId: string }) {
         Hubbub opens the folder read-only, so nothing changes on the server and mails stay unread. The
         password is kept in your system’s keychain.
       </p>
+    </div>
+  )
+}
+
+/** Per server: the addresses your calendar knows as yours, and adding one */
+function MyAddresses() {
+  const order = useApp((s) => s.accountOrder)
+  const accounts = useApp((s) => s.accounts)
+  return (
+    <>
+      {order.map((id) => (
+        <MyAddressesFor
+          key={id}
+          accountId={id}
+          label={order.length > 1 ? accounts[id]?.info.label : undefined}
+        />
+      ))}
+    </>
+  )
+}
+
+function MyAddressesFor({ accountId, label }: { accountId: string; label?: string }) {
+  const [list, setList] = useState<string[]>([])
+  const [adding, setAdding] = useState('')
+  const reload = (): void => void reloadMyAddresses(accountId).then(setList)
+  useEffect(reload, [accountId])
+  const mailOnly = mailOnlyAddresses(accountId)
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adding.trim())
+  return (
+    <div className="setting-row my-addresses">
+      <div className="sr-label">
+        <div className="sr-title">Your email addresses{label ? ` · ${label}` : ''}</div>
+        <div className="sr-sub">
+          Invitations to these are yours, and you can edit the meetings you organize from them. Hubbub also
+          counts your aliases in Nextcloud Mail, but Nextcloud only emails answers and meeting changes from
+          your account’s addresses: add an alias to your account for that.
+        </div>
+        <div className="my-address-list">
+          {list
+            .filter((a) => !mailOnly.includes(a))
+            .map((a) => (
+              <span key={a} className="my-address">
+                {a}
+              </span>
+            ))}
+        </div>
+        {mailOnly.length > 0 && (
+          <div className="my-address-mail">
+            {mailOnly.map((a) => (
+              <div key={a} className="my-address-mail-row">
+                <span className="my-address">{a}</span>
+                <span className="my-address-note">Nextcloud Mail alias</span>
+                <AddAddress accountId={accountId} email={a} label="Add to account" onDone={reload} />
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="my-address-add">
+          <input
+            className="input"
+            placeholder="another.address@example.com"
+            value={adding}
+            onChange={(e) => setAdding(e.target.value)}
+          />
+          {valid && (
+            <AddAddress
+              accountId={accountId}
+              email={adding.trim()}
+              label="Add"
+              onDone={() => {
+                setAdding('')
+                reload()
+              }}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

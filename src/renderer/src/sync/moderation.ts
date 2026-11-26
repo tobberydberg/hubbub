@@ -1,6 +1,7 @@
 import { talk } from '@renderer/api/talk'
 import { ParticipantType, RoomType, type Participant, type Room } from '@shared/talk-types'
 import { setApp, showToast, useApp } from '@renderer/store/app'
+import { usePrefs } from '@renderer/store/prefs'
 import { getSync } from './engine'
 
 // Moderating a conversation: the lobby, read-only, disappearing messages, what everyone may do,
@@ -88,4 +89,28 @@ export function inLobby(room: Room): boolean {
 
 export function useRoom(accountId: string, token: string): Room | undefined {
   return useApp((s) => s.accounts[accountId]?.rooms[token])
+}
+
+/**
+ * Keeps a meeting conversation that Talk would otherwise delete (with its chat) some time after the
+ * meeting: it's unbound from its meeting and becomes an ordinary conversation, which Hubbub still
+ * lists under Meetings.
+ */
+export async function keepConversation(accountId: string, room: Room): Promise<boolean> {
+  const ok = await moderate(
+    accountId,
+    'Keeping the conversation',
+    () => talk(accountId).unbindFromObject(room.token),
+    `${room.displayName} is kept: Talk won't delete it`
+  )
+  if (ok) {
+    const prefs = usePrefs.getState()
+    prefs.set({
+      meetingOverrides: {
+        ...prefs.meetingOverrides,
+        [accountId]: { ...prefs.meetingOverrides[accountId], [room.token]: true }
+      }
+    })
+  }
+  return ok
 }

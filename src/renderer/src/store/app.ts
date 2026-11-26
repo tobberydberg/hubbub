@@ -106,6 +106,7 @@ export type ModalState =
   | { type: 'meeting'; accountId: string; token: string }
   | { type: 'call-setup'; accountId: string; token: string }
   | { type: 'status'; accountId: string }
+  | { type: 'calendar-io'; accountId: string; mode: 'import' | 'export' }
   | { type: 'out-of-office'; accountId: string }
   | { type: 'files-picker'; accountId: string; token: string; threadId?: number }
   /** New calendar event (optionally at a time), or editing one by its id */

@@ -50,3 +50,20 @@ export function gridShape(
   }
   return best
 }
+
+/**
+ * The grid when everyone is shown: as large as fits, but no smaller than `minWidth`; then as many
+ * columns of that size as fit, and the grid scrolls.
+ */
+export function allTilesShape(
+  count: number,
+  width: number,
+  height: number,
+  gap: number,
+  minWidth: number
+): { cols: number; tileWidth: number; scrolling: boolean } {
+  const fit = gridShape(count, width, height, gap)
+  if (fit.tileWidth >= minWidth) return { cols: fit.cols, tileWidth: fit.tileWidth, scrolling: false }
+  const cols = Math.max(1, Math.floor((width + gap) / (minWidth + gap)))
+  return { cols, tileWidth: Math.floor((width - gap * (cols - 1)) / cols), scrolling: true }
+}

@@ -5,6 +5,7 @@ import { presetRule } from './repeat'
 import {
   excludeOccurrenceIcs,
   localTimeZone,
+  optionsOf,
   newEventIcs,
   parseStored,
   repeatOf,
@@ -91,6 +92,44 @@ describe('newEventIcs', () => {
     )
     expect(repeatOf(parseStored(ics).master)).toBe('keep')
     expect(updateEventIcs(ics, draft({ repeat: 'keep' }), null)).toContain('RRULE:FREQ=HOURLY;INTERVAL=6')
+  })
+})
+
+describe('scheduling mark', () => {
+  it('editing takes off the mark that kept an imported meeting from inviting everyone', () => {
+    const imported = newEventIcs(
+      draft({ attendees: [{ name: 'Bob', email: 'bob@example.test' }] }),
+      'uid-m1',
+      me
+    )
+      .replace('ORGANIZER;', 'ORGANIZER;SCHEDULE-AGENT=CLIENT;')
+      .replace(/ATTENDEE;/g, 'ATTENDEE;SCHEDULE-AGENT=CLIENT;')
+    expect(imported).toContain('SCHEDULE-AGENT=CLIENT')
+    const edited = updateEventIcs(
+      imported,
+      draft({ title: 'Changed', attendees: [{ name: 'Bob', email: 'bob@example.test' }] }),
+      me
+    )
+    expect(edited).not.toContain('SCHEDULE-AGENT')
+  })
+})
+
+describe('invitation options', () => {
+  it('writes Outlook’s options only when something is not allowed', () => {
+    const open = newEventIcs(draft({ forwarding: true, proposals: true }), 'uid-o1', null)
+    expect(open).not.toContain('X-MICROSOFT')
+    const closed = newEventIcs(draft({ forwarding: false, proposals: false }), 'uid-o2', null)
+    expect(closed).toContain('X-MICROSOFT-DONOTFORWARDMEETING:TRUE')
+    expect(closed).toContain('X-MICROSOFT-DISALLOW-COUNTER:TRUE')
+    expect(optionsOf(parseStored(closed).master)).toEqual({ forwarding: false, proposals: false })
+  })
+
+  it('keeps what is stored unless the draft says otherwise', () => {
+    const closed = newEventIcs(draft({ forwarding: false }), 'uid-o3', null)
+    const kept = updateEventIcs(closed, draft({ title: 'Renamed' }), null)
+    expect(optionsOf(parseStored(kept).master).forwarding).toBe(false)
+    const reopened = updateEventIcs(closed, draft({ forwarding: true }), null)
+    expect(optionsOf(parseStored(reopened).master).forwarding).toBe(true)
   })
 })
 

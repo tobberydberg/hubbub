@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gridShape, pickTiles, type TileCandidate } from './layout'
+import { allTilesShape, gridShape, pickTiles, type TileCandidate } from './layout'
 
 const p = (id: string, partial: Partial<TileCandidate> = {}): TileCandidate => ({
   id,
@@ -43,5 +43,23 @@ describe('gridShape', () => {
 
   it('makes a 3×3 grid for nine people in a 16:9 view', () => {
     expect(gridShape(9, 1600, 900, 8)).toMatchObject({ cols: 3, rows: 3, tileWidth: 523 })
+  })
+})
+
+describe('allTilesShape', () => {
+  it('fits everyone when the tiles stay large enough', () => {
+    expect(allTilesShape(6, 1200, 700, 8, 200)).toMatchObject({ scrolling: false })
+  })
+
+  it('keeps tiles usable and scrolls when there are many people', () => {
+    const shape = allTilesShape(40, 1000, 600, 8, 200)
+    expect(shape.scrolling).toBe(true)
+    expect(shape.cols).toBe(4)
+    expect(shape.tileWidth).toBeGreaterThanOrEqual(200)
+    expect(shape.cols * shape.tileWidth + (shape.cols - 1) * 8).toBeLessThanOrEqual(1000)
+  })
+
+  it('shows one column in a very narrow window', () => {
+    expect(allTilesShape(40, 150, 600, 8, 200)).toMatchObject({ cols: 1, scrolling: true })
   })
 })

@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Check } from 'lucide-react'
 
@@ -28,9 +36,14 @@ interface PopoverProps {
   className?: string
 }
 
+/** The document popovers open in: the main window's, or the popped-out call window's */
+export const PortalDocument = createContext<Document | null>(null)
+
 /** Fixed-position layer that stays within the viewport and closes on outside click or Escape. */
 export function Popover({ anchor, onClose, children, className = 'popover' }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const doc = useContext(PortalDocument) ?? document
+  const win = doc.defaultView ?? window
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useLayoutEffect(() => {
@@ -40,16 +53,18 @@ export function Popover({ anchor, onClose, children, className = 'popover' }: Po
       const { width, height } = el.getBoundingClientRect()
       let left = anchor.alignRight ? anchor.x - width : anchor.x
       let top = anchor.y
-      if (top + height > window.innerHeight - 8) top = Math.max(8, anchor.y - (anchor.height ?? 0) - height)
-      left = Math.max(8, Math.min(left, window.innerWidth - width - 8))
+      if (top + height > win.innerHeight - 8) top = Math.max(8, anchor.y - (anchor.height ?? 0) - height)
+      left = Math.max(8, Math.min(left, win.innerWidth - width - 8))
       setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }))
     }
     place()
     // Content that loads after opening (a profile card) changes the size
-    const observer = new ResizeObserver(place)
+    const Observer =
+      (win as Window & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver ?? ResizeObserver
+    const observer = new Observer(place)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [anchor])
+  }, [anchor, win])
 
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
@@ -61,16 +76,16 @@ export function Popover({ anchor, onClose, children, className = 'popover' }: Po
         onClose()
       }
     }
-    const t = setTimeout(() => document.addEventListener('mousedown', onDown), 0)
-    document.addEventListener('keydown', onKey, true)
-    window.addEventListener('blur', onClose)
+    const t = setTimeout(() => doc.addEventListener('mousedown', onDown), 0)
+    doc.addEventListener('keydown', onKey, true)
+    win.addEventListener('blur', onClose)
     return () => {
       clearTimeout(t)
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('blur', onClose)
+      doc.removeEventListener('mousedown', onDown)
+      doc.removeEventListener('keydown', onKey, true)
+      win.removeEventListener('blur', onClose)
     }
-  }, [onClose])
+  }, [onClose, doc, win])
 
   return createPortal(
     <div
@@ -85,7 +100,7 @@ export function Popover({ anchor, onClose, children, className = 'popover' }: Po
     >
       {children}
     </div>,
-    document.body
+    doc.body
   )
 }
 

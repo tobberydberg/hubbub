@@ -134,6 +134,28 @@ describe('parseEvents', () => {
     expect(review.reminders).toEqual([15])
   })
 
+  it('takes the answer you gave when you’re among the invitees at two of your addresses', () => {
+    const twice = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+ <d:response><d:href>/remote.php/dav/calendars/alice/work/alias.ics</d:href><d:propstat><d:prop><cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:alias
+SUMMARY:Sent to my alias
+DTSTART:20261127T090000Z
+DTEND:20261127T100000Z
+ORGANIZER;CN=Bob Test:mailto:bob@example.test
+ATTENDEE;CN=Alice Test;PARTSTAT=NEEDS-ACTION:mailto:alice.alias@example.test
+ATTENDEE;CN=Alice Test;PARTSTAT=DECLINED:mailto:alice@example.test
+END:VEVENT
+END:VCALENDAR
+</cal:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+</d:multistatus>`
+    const mine = { ...ctx, myEmails: ['alice@example.test', 'alice.alias@example.test'] }
+    expect(parseEvents(twice, mine)[0].myAnswer).toBe('DECLINED')
+    expect(parseEvents(twice, ctx)[0].myAnswer).toBe('DECLINED')
+  })
+
   it('reads event data with the line endings encoded, as Nextcloud sends it', () => {
     const encoded = report.replace(/\n(?=[A-Z ])/g, '&#13;\n')
     expect(parseEvents(encoded, ctx).map((e) => e.uid)).toEqual(events.map((e) => e.uid))

@@ -6,11 +6,13 @@ import {
   type CalendarInfo
 } from '@renderer/lib/caldav'
 import { addDays, startOfDay, viewRange } from '@renderer/lib/calendar-time'
-import { setApp, useApp } from '@renderer/store/app'
+import { setApp, showToast, useApp } from '@renderer/store/app'
 import { updateCalendars, useCalendar, type EventSet } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
 import { requestCall } from '@renderer/calls/call'
+import { talk } from '@renderer/api/talk'
 import { openRoom } from './actions'
+import { reopenByLink } from './visited'
 
 // Keeps each server's calendars and events current: the calendar list (cheap) every 30 seconds, and
 // events again only for calendars whose change tag moved, so edits in Nextcloud Calendar or on a
@@ -22,31 +24,115 @@ const UPCOMING_HOURS = 24
 const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 const addresses = new Map<string, string[]>()
+const mailAliases = new Map<string, string[]>()
 
 /**
- * Your email addresses as your calendar knows them: the main one and the additional ones from your
- * Nextcloud personal settings. Invitations to these are yours, and answers go out from them.
+ * Your email addresses: the main one, the additional ones from your Nextcloud personal settings, and
+ * your aliases in Nextcloud Mail. Invitations to these are yours, and so are meetings organized from
+ * them.
  */
 export function myAddresses(accountId: string): string[] {
+  return [...new Set([...calendarAddresses(accountId), ...(mailAliases.get(accountId) ?? [])])]
+}
+
+/**
+ * The addresses your calendar knows as yours (the main one and your Nextcloud account's additional
+ * ones). Nextcloud emails your answers and your meeting changes only from these: a Nextcloud Mail
+ * alias has to be added to your account for that.
+ */
+export function calendarAddresses(accountId: string): string[] {
   const email = useApp.getState().accounts[accountId]?.user?.email
   const known = addresses.get(accountId) ?? []
   return [...new Set([...(email ? [email.toLowerCase()] : []), ...known])]
 }
 
-/** Loads your calendar addresses (once per server and session, again after a failure) */
+/** Your Nextcloud Mail aliases that your calendar doesn't know */
+export function mailOnlyAddresses(accountId: string): string[] {
+  const known = calendarAddresses(accountId)
+  return (mailAliases.get(accountId) ?? []).filter((a) => !known.includes(a))
+}
+
+/** Loads your addresses (once per server and session, again after a failure) */
 async function loadMyAddresses(accountId: string): Promise<void> {
   if (addresses.has(accountId)) return
   const userId = useApp.getState().accounts[accountId]?.info.userId
   if (!userId) return
-  try {
-    const list = await window.hubbub.calendarAddresses(accountId, userId)
+  const [calendar, mail] = await Promise.all([
+    window.hubbub.calendarAddresses(accountId, userId).catch(() => null),
+    loadMailAliases(accountId)
+  ])
+  mailAliases.set(accountId, mail)
+  // Without them the main address is enough for now
+  if (calendar)
     addresses.set(
       accountId,
-      list.map((a) => a.replace(/^mailto:/i, '').toLowerCase()).filter((a) => a.includes('@'))
+      calendar.map((a) => a.replace(/^mailto:/i, '').toLowerCase()).filter((a) => a.includes('@'))
     )
+}
+
+/** Your own Nextcloud Mail accounts' addresses and aliases (not mailboxes delegated to you) */
+async function loadMailAliases(accountId: string): Promise<string[]> {
+  try {
+    const accounts = await talk(accountId).mailAccounts()
+    return accounts
+      .filter((a) => !a.isDelegated)
+      .flatMap((a) => [a.emailAddress, ...(a.aliases ?? []).map((x) => x.alias)])
+      .filter((a): a is string => !!a && a.includes('@'))
+      .map((a) => a.trim().toLowerCase())
   } catch {
-    // The main address is enough for now
+    // No Nextcloud Mail on this server
+    return []
   }
+}
+
+/**
+ * Adds an address to your Nextcloud account, then reloads the calendar with it as yours. Nextcloud
+ * may want your password confirmed first (needsPassword): then call again with it.
+ */
+export async function addMyAddress(
+  accountId: string,
+  email: string,
+  password?: string
+): Promise<{ ok: boolean; needsPassword?: boolean; error?: string }> {
+  const address = email.trim().toLowerCase()
+  const added = (already = false): { ok: true } => {
+    // The calendars reload in the background: on a big calendar that takes a while
+    void refreshCalendars(accountId, true)
+    showToast(`${address} is ${already ? 'already' : 'now'} one of your addresses`)
+    return { ok: true }
+  }
+  // Added in Nextcloud's settings meanwhile: nothing to do
+  if ((await reloadCalendarAddresses(accountId)).includes(address)) return added(true)
+  let res: { ok: boolean; needsPassword?: boolean; error?: string }
+  try {
+    res = await window.hubbub.accounts.addEmail(accountId, address, password)
+  } catch (err) {
+    return { ok: false, error: errorText(err) }
+  }
+  if (res.ok) {
+    await reloadCalendarAddresses(accountId)
+    return added()
+  }
+  if (res.needsPassword) return res
+  // Nextcloud refuses an address the account already has, or one another account uses, without
+  // saying which
+  if ((await reloadCalendarAddresses(accountId)).includes(address)) return added(true)
+  return /^HTTP 400$/.test(res.error ?? '')
+    ? { ok: false, error: 'Nextcloud didn’t take that address (another account may use it)' }
+    : res
+}
+
+async function reloadCalendarAddresses(accountId: string): Promise<string[]> {
+  addresses.delete(accountId)
+  await loadMyAddresses(accountId)
+  return calendarAddresses(accountId)
+}
+
+/** Your addresses, reloaded */
+export async function reloadMyAddresses(accountId: string): Promise<string[]> {
+  addresses.delete(accountId)
+  await loadMyAddresses(accountId)
+  return myAddresses(accountId)
 }
 
 function context(accountId: string, calendarHref: string): Parameters<typeof parseEvents>[1] {
@@ -234,8 +320,12 @@ export function startCalendarSync(): void {
   }
   timer = setInterval(tick, POLL)
   setTimeout(tick, 3_000)
-  // Coming back to the app: check right away
-  window.addEventListener('focus', tick)
+  // Coming back to the app: check right away, with your addresses again (one may have been added in
+  // Nextcloud's settings meanwhile)
+  window.addEventListener('focus', () => {
+    addresses.clear()
+    tick()
+  })
 }
 
 /** The events of the next day in shown calendars, for strips and reminders */
@@ -273,10 +363,11 @@ export function joinEventCall(accountId: string, event: CalendarEvent): void {
   const account = useApp.getState().accounts[accountId]
   if (!token || !account) return
   if (account.rooms[token]) void requestCall(accountId, token)
+  // Not in it (any more): join it through its link, as the link in the invitation would
   else
-    void window.hubbub.app.openExternal(
-      `${account.info.serverUrl.replace(/\/+$/, '')}/index.php/call/${token}`
-    )
+    void reopenByLink(accountId, token, event.title).then((ok) => {
+      if (ok) void requestCall(accountId, token)
+    })
 }
 
 /** Opens the event's Talk conversation in the chat. */
@@ -284,7 +375,8 @@ export function openEventChat(accountId: string, event: CalendarEvent): void {
   const token = event.talkToken
   if (!token) return
   showCalendar(accountId, false)
-  openRoom(accountId, token)
+  if (useApp.getState().accounts[accountId]?.rooms[token]) openRoom(accountId, token)
+  else void reopenByLink(accountId, token, event.title)
 }
 
 /** The event in Nextcloud Calendar on the web (its day) */

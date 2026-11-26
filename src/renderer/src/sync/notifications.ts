@@ -64,14 +64,20 @@ export async function runNotificationAction(
   }
 }
 
-/** Opens what a notification is about: Talk conversations and messages in Hubbub, the rest in the browser */
+/**
+ * Opens what a notification is about (Talk conversations and messages in Hubbub, the rest in the
+ * browser) and dismisses it: once opened, it has been seen, everywhere
+ */
 export function openNotification(accountId: string, n: ServerNotification): void {
   if (n.app === 'dav' && n.object_type === 'calendar_reminder') {
     selectAccount(accountId)
     showCalendar(accountId, true)
+  } else if (n.link) {
+    openLink(accountId, n.link)
+  } else {
     return
   }
-  if (n.link) openLink(accountId, n.link)
+  void dismissNotification(accountId, n.notification_id)
 }
 
 /** A Talk link of this server ({server}/call/{token}#message_{id}) as conversation and message */

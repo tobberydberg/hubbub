@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Video, X } from 'lucide-react'
 import { addDays } from '@renderer/lib/calendar-time'
-import { parseStored, repeatOf, type EventDraft, type Invitee, type Repeat } from '@renderer/lib/ical-edit'
+import {
+  optionsOf,
+  parseStored,
+  repeatOf,
+  type EventDraft,
+  type Invitee,
+  type Repeat
+} from '@renderer/lib/ical-edit'
 import { hasFeature, setApp, useApp, type ModalState } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
@@ -89,6 +96,9 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
   )
   const [withTalk, setWithTalk] = useState(false)
   const [loading, setLoading] = useState(!!existing)
+  // Outlook's meeting options; allowed unless the stored meeting says otherwise
+  const [forwarding, setForwarding] = useState(true)
+  const [proposals, setProposals] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,7 +118,13 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
       .calendarObject(accountId, { method: 'GET', href: existing.href })
       .then((res) => {
         if (!alive) return
-        if (res.status === 200) setRepeat(repeatOf(parseStored(res.body).master))
+        if (res.status === 200) {
+          const { master } = parseStored(res.body)
+          setRepeat(repeatOf(master))
+          const options = optionsOf(master)
+          setForwarding(options.forwarding)
+          setProposals(options.proposals)
+        }
         setLoading(false)
       })
       .catch(() => alive && setLoading(false))
@@ -136,7 +152,9 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
       description,
       reminder,
       repeat,
-      attendees: guests.map(({ name, email }) => ({ name, email }))
+      attendees: guests.map(({ name, email }) => ({ name, email })),
+      forwarding,
+      proposals
     }
     const ok = await saveEvent(accountId, {
       calendarHref,
@@ -308,6 +326,22 @@ export function EventDialog({ modal }: { modal: Extract<ModalState, { type: 'eve
           </p>
         )}
         {error && <p className="error-text">{error}</p>}
+        {guests.length > 0 && (
+          <div className="invite-options">
+            <label className="perm-row">
+              <input type="checkbox" checked={forwarding} onChange={(e) => setForwarding(e.target.checked)} />
+              Invitees can forward the invitation
+            </label>
+            <label className="perm-row">
+              <input type="checkbox" checked={proposals} onChange={(e) => setProposals(e.target.checked)} />
+              Invitees can propose a new time
+            </label>
+            <p className="help">
+              Outlook and Teams respect these; other calendar apps may not. To let someone change the meeting
+              itself, share the calendar with them with edit rights in Nextcloud Calendar.
+            </p>
+          </div>
+        )}
 
         <label className="field-label">Reminder</label>
         <select

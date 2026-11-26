@@ -5,10 +5,13 @@ import { detectIncomingCalls } from '@renderer/calls/ringing'
 import { toPlainText } from '@renderer/lib/messages'
 import { chatKey, setApp, useApp, type AccountState } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
+import { useCall } from '@renderer/store/call'
+import { callWindowFocused } from '@renderer/calls/popout-window'
 import { jumpToMessage, openRoom, selectAccount } from './actions'
 import { ChatPoller, loadInitial, loadThread } from './chat'
 import { notePresenceInRooms, refreshOwnStatus } from './status'
 import { loadOwnAbsence } from './absence'
+import { rememberVisited } from './visited'
 import { initThreadBaseline, refreshSubscribedThreads } from './threads'
 import { formatEventTime } from '@renderer/lib/calendar-time'
 import { useCalendar } from '@renderer/store/calendar'
@@ -193,6 +196,7 @@ class AccountSync {
         if (a.activeToken && !next[a.activeToken]) a.activeToken = null
       })
       notePresenceInRooms(this.accountId, rooms)
+      rememberVisited(this.accountId, rooms)
     } catch (err) {
       this.failed(err)
     }
@@ -309,13 +313,16 @@ function startPollingWatcher(): void {
     const s = useApp.getState()
     const a = s.activeAccountId ? s.accounts[s.activeAccountId] : undefined
     const rhs = s.rhs?.type === 'thread' ? `${s.rhs.token}#${s.rhs.rootId}` : ''
-    const sig = `${s.activeAccountId}|${a?.activeToken}|${a?.view}|${a?.status}|${rhs}`
+    const call = useCall.getState().active
+    const callChat = call?.side === 'chat' ? `${call.accountId}/${call.token}` : ''
+    const sig = `${s.activeAccountId}|${a?.activeToken}|${a?.view}|${a?.status}|${rhs}|${callChat}`
     if (sig !== last) {
       last = sig
       ensureActivePolling()
     }
   }
   useApp.subscribe(check)
+  useCall.subscribe(check)
   check()
 }
 
@@ -323,6 +330,9 @@ function startPollingWatcher(): void {
 
 let roomPoller: ChatPoller | null = null
 let threadPoller: ChatPoller | null = null
+/** The chat of the call, when its panel is open in the call view and it isn't polled already */
+let callPoller: ChatPoller | null = null
+let callKey: string | null = null
 /** Key of the conversation/thread being polled (or loading); null when idle */
 let roomKey: string | null = null
 let threadKey: string | null = null
@@ -330,8 +340,9 @@ let threadKey: string | null = null
 function stopPollers(): void {
   roomPoller?.stop()
   threadPoller?.stop()
-  roomPoller = threadPoller = null
-  roomKey = threadKey = null
+  callPoller?.stop()
+  roomPoller = threadPoller = callPoller = null
+  roomKey = threadKey = callKey = null
 }
 
 /** Makes sure exactly the visible conversation (and open thread) are being polled. */
@@ -391,6 +402,29 @@ export function ensureActivePolling(): void {
       })
     }
   }
+
+  // The call's chat in the call view, when it isn't the conversation polled already
+  const call = useCall.getState().active
+  const callAccount = call ? s.accounts[call.accountId] : undefined
+  const wantCall =
+    call?.side === 'chat' && callAccount?.status === 'online' ? chatKey(call.accountId, call.token) : null
+  const want = wantCall && wantCall !== roomKey ? wantCall : null
+  if (callKey !== want) {
+    callPoller?.stop()
+    callPoller = null
+    callKey = want
+    if (want && call) {
+      const { accountId: cAccount, token: cToken } = call
+      const loaded = s.chats[want]?.loaded ? Promise.resolve() : loadInitial(cAccount, cToken)
+      void loaded.then(() => {
+        if (callKey !== want) return
+        callPoller = new ChatPoller(cAccount, cToken, undefined, () =>
+          markCallChatRead(cAccount, cToken)
+        ).start()
+        markCallChatRead(cAccount, cToken)
+      })
+    }
+  }
 }
 
 // --- Read markers -------------------------------------------------------------
@@ -417,13 +451,24 @@ function markActiveRead(): void {
   const s = useApp.getState()
   const account = s.activeAccountId ? s.accounts[s.activeAccountId] : undefined
   const token = account?.view === 'room' ? account.activeToken : null
-  if (!account || !token) return
-  const room = account.rooms[token]
-  const chat = s.chats[chatKey(account.info.id, token)]
-  if (!room || !chat?.loaded || keepUnread === chatKey(account.info.id, token)) return
+  if (account && token) markRead(account.info.id, token)
+}
+
+/** The call's chat, read in the call view (in either window) */
+function markCallChatRead(accountId: string, token: string): void {
+  if (document.hasFocus() || callWindowFocused()) markRead(accountId, token)
+}
+
+/** Marks what's loaded of a conversation as read */
+function markRead(accountId: string, token: string): void {
+  const s = useApp.getState()
+  const account = s.accounts[accountId]
+  const room = account?.rooms[token]
+  const chat = s.chats[chatKey(accountId, token)]
+  if (!account || !room || !chat?.loaded || keepUnread === chatKey(accountId, token)) return
   const newest = Math.max(chat.newestId, 0)
   if (newest <= room.lastReadMessage && room.unreadMessages === 0) return
-  update(account.info.id, (a) => {
+  update(accountId, (a) => {
     const r = a.rooms[token]
     if (!r) return
     r.unreadMessages = 0
@@ -432,7 +477,7 @@ function markActiveRead(): void {
     r.lastReadMessage = Math.max(r.lastReadMessage, newest)
   })
   if (newest > 0)
-    void talk(account.info.id)
+    void talk(accountId)
       .markRead(token, newest)
       .catch(() => undefined)
 }

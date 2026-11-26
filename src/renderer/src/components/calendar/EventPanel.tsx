@@ -23,6 +23,7 @@ import { loadDirectory } from '@renderer/sync/people'
 import { Avatar } from '../common/Avatar'
 import { Linkified } from '../common/Linkified'
 import { openContactCard, openProfileCard } from '../common/ProfileCard'
+import { AliasHint } from './AliasHint'
 
 // A calendar event in the side panel: when and where, its call and chat, your answer, and who is
 // coming.
@@ -204,11 +205,17 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
               <Video size={16} /> Join call
             </button>
           )}
-          {roomName && (
-            <button className="ev-btn light" onClick={() => openEventChat(accountId, event)}>
+          {
+            <button
+              className="ev-btn light"
+              title={
+                roomName ? undefined : 'You’re not in this conversation (any more): opening it joins it again'
+              }
+              onClick={() => openEventChat(accountId, event)}
+            >
               <MessageSquare size={16} /> Open chat
             </button>
-          )}
+          }
         </div>
       )}
 
@@ -309,6 +316,8 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
         </div>
       )}
 
+      <AliasHint accountId={accountId} event={event} />
+
       {canEdit && !confirmDelete && (
         <div className="event-actions">
           <button
@@ -358,12 +367,19 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
 }
 
 /** The organizer is usually also an attendee; list each person once, the organizer first */
+/** Everyone once; you once too, with the answer you gave, when you're listed at several addresses */
 function dedupe(people: EventPerson[]): EventPerson[] {
-  const seen = new Set<string>()
-  return people.filter((p) => {
-    const key = (p.email ?? p.name).toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  const seen = new Map<string, number>()
+  const out: EventPerson[] = []
+  for (const p of people) {
+    const key = p.isMe ? ' me' : (p.email ?? p.name).toLowerCase()
+    const at = seen.get(key)
+    if (at === undefined) {
+      seen.set(key, out.length)
+      out.push(p)
+    } else if (p.isMe && out[at].answer === 'NEEDS-ACTION' && p.answer && p.answer !== 'NEEDS-ACTION') {
+      out[at] = p
+    }
+  }
+  return out
 }

@@ -115,6 +115,9 @@ export interface MeetingEvent {
 export interface MailAccount {
   id: number
   emailAddress: string
+  aliases?: { alias: string }[]
+  /** A mailbox someone delegated to you */
+  isDelegated?: boolean
 }
 
 export interface MailMailbox {
@@ -374,6 +377,8 @@ export function talk(accountId: string) {
     ban: (token: string, actorType: string, actorId: string, internalNote: string) =>
       post<Ban>(`${SPREED}/v1/ban/${token}`, { actorType, actorId, internalNote }),
     unban: (token: string, banId: number) => del(`${SPREED}/v1/ban/${token}/${banId}`),
+    /** Unbinds a meeting conversation from its meeting, so Talk doesn't delete it later */
+    unbindFromObject: (token: string) => del<Room>(`${SPREED}/v4/room/${token}/object`),
     /** Deletes every message of the conversation, for everyone */
     clearHistory: (token: string) => del(`${SPREED}/v1/chat/${token}`),
 
@@ -576,6 +581,15 @@ export function talk(accountId: string) {
       post(`${SPREED}/v1/reaction/${token}/${id}`, { reaction }),
     unreact: (token: string, id: number, reaction: string) =>
       del(`${SPREED}/v1/reaction/${token}/${id}`, { reaction }),
+    /** Who reacted to a message, with one emoji or all of them */
+    reactionsOf: (token: string, id: number, reaction?: string) =>
+      get<
+        | Record<
+            string,
+            { actorType: string; actorId: string; actorDisplayName: string; timestamp: number }[]
+          >
+        | []
+      >(`${SPREED}/v1/reaction/${token}/${id}`, { query: { reaction } }),
     mentions: (token: string, search: string) =>
       get<MentionSuggestion[]>(`${SPREED}/v1/chat/${token}/mentions`, {
         query: { search, limit: 15, includeStatus: true }
@@ -713,6 +727,12 @@ export function talk(accountId: string) {
     /** Someone else's status; 404 when they have never set one */
     statusOf: (userId: string) =>
       get<UserStatus>(`/ocs/v2.php/apps/user_status/api/v1/statuses/${encodeURIComponent(userId)}`),
+    /**
+     * Adds an email address to your account (Nextcloud's "additional email"). Your calendar counts it as
+     * yours then: invitations to it, and meetings organized from it.
+     */
+    addAdditionalEmail: (userId: string, email: string) =>
+      put(`/ocs/v2.php/cloud/users/${encodeURIComponent(userId)}`, { key: 'additional_mail', value: email }),
     /** Someone's profile, as far as they share it with you */
     profile: (userId: string) => get<UserProfile>(`/ocs/v2.php/profile/${encodeURIComponent(userId)}`),
     /** Whether the server lets users choose "Busy" (Nextcloud 30+) */

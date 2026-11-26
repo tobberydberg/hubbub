@@ -21,6 +21,7 @@ import {
 } from '@renderer/sync/actions'
 import { getSync, roomMentionCount } from '@renderer/sync/engine'
 import { cachedPeople, loadDirectory, usePeopleSearch } from '@renderer/sync/people'
+import { leftVisited, reopenByLink } from '@renderer/sync/visited'
 import { Avatar } from '../common/Avatar'
 import { Modal } from '../common/Modal'
 import { RoomIcon } from '../sidebar/Sidebar'
@@ -33,6 +34,7 @@ import { CallSetupModal } from './CallSetupModal'
 import { EventDialog } from '../calendar/EventDialog'
 import { PollModal } from './PollModal'
 import { StatusModal } from './StatusModal'
+import { CalendarIoDialog } from '../calendar/CalendarIoDialog'
 import { FilesPickerModal } from './FilesPicker'
 import { OutOfOfficeModal } from './OutOfOfficeModal'
 
@@ -52,6 +54,8 @@ export function ModalHost() {
       return <SettingsModal onClose={close} />
     case 'status':
       return <StatusModal accountId={modal.accountId} />
+    case 'calendar-io':
+      return <CalendarIoDialog accountId={modal.accountId} mode={modal.mode} />
     case 'out-of-office':
       return <OutOfOfficeModal accountId={modal.accountId} />
     case 'files-picker':
@@ -95,6 +99,8 @@ const FILTERS: { id: SwitcherFilter; label: string }[] = [
 type SwitcherItem =
   | { kind: 'room'; accountId: string; label: string; color: string; room: Room }
   | { kind: 'person'; accountId: string; label: string; color: string; person: Person }
+  /** A conversation joined through its link and left: Talk took it off the list, it can be opened again */
+  | { kind: 'visited'; accountId: string; label: string; color: string; room: Room }
 
 /** The existing one-to-one conversation with a user, if any. */
 function dmRoomFor(rooms: Record<string, Room>, userId: string): Room | undefined {
@@ -183,7 +189,27 @@ function ChannelSwitcher() {
               person
             }))
         : []
-    return [...rooms, ...people]
+    // Conversations joined through their link that dropped off the list when you left them
+    const visited: SwitcherItem[] =
+      filter === 'unread'
+        ? []
+        : order
+            .flatMap((id) => {
+              const a = accounts[id]
+              if (!a) return []
+              return leftVisited(id)
+                .map((v) => ({ ...v, unreadMessages: 0 }) as unknown as Room)
+                .filter((r) => (q ? score(r) >= 0 : filter !== 'meetings' || isMeeting(r)))
+                .map((room) => ({
+                  kind: 'visited' as const,
+                  accountId: id,
+                  label: a.info.label,
+                  color: a.info.color,
+                  room
+                }))
+            })
+            .slice(0, 10)
+    return [...rooms, ...visited, ...people]
     // directoryLoaded re-runs the search once the people directory has arrived
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, order, query, activeId, directoryLoaded, filter, meetingOverrides])
@@ -195,6 +221,8 @@ function ChannelSwitcher() {
     close()
     selectAccount(item.accountId)
     if (item.kind === 'room') openRoom(item.accountId, item.room.token)
+    else if (item.kind === 'visited')
+      void reopenByLink(item.accountId, item.room.token, item.room.displayName)
     else void openDirectMessage(item.accountId, item.person.id)
   }
 
@@ -263,6 +291,20 @@ function ChannelSwitcher() {
                 />
                 <span className="si-name">{item.person.name}</span>
                 <span className="si-sub">@{item.person.id}</span>
+                {server}
+              </button>
+            )
+          }
+          if (item.kind === 'visited') {
+            return (
+              <button
+                key={`${item.accountId}/left/${item.room.token}`}
+                {...common}
+                className={`${common.className} visited`}
+              >
+                <RoomIcon accountId={item.accountId} room={item.room} />
+                <span className="si-name">{item.room.displayName}</span>
+                <span className="si-sub">you left · open again</span>
                 {server}
               </button>
             )

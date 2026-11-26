@@ -62,10 +62,29 @@ export interface ActiveCall {
   reactions: CallReaction[]
   selfStreamVersion: number
   participants: Record<string, CallParticipant>
+  /** The side panel of the call view: who is in the call, or the conversation's chat */
+  side: 'people' | 'chat' | null
+  /** Everyone gets a tile, instead of the most relevant ones and "+N more" */
+  showAllTiles: boolean
+  /** People in the call asking to become a moderator, for moderators to answer */
+  moderatorRequests: ModeratorRequest[]
+  /** Our own request to become a moderator */
+  moderatorAsk: {
+    state: 'waiting' | 'granted' | 'declined' | 'unanswered' | 'asked-in-chat'
+    at: number
+  } | null
   /** Live captions are on for us (needs the live_transcription app on the server) */
   captionsOn: boolean
   /** The latest live captions, oldest first */
   captions: Caption[]
+}
+
+export interface ModeratorRequest {
+  /** Their signaling session, to answer */
+  sessionId: string
+  userId: string
+  name: string
+  at: number
 }
 
 export interface Caption {

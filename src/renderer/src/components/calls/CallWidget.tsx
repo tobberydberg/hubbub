@@ -20,6 +20,7 @@ import {
   toggleScreenShare
 } from '@renderer/calls/call'
 import { RecordingBadge } from './CallView'
+import { ModeratorRequestsBar } from './ModeratorRequests'
 import { openRoom, selectAccount } from '@renderer/sync/actions'
 import { useApp } from '@renderer/store/app'
 import { updateCall, useCall, type ActiveCall } from '@renderer/store/call'
@@ -60,6 +61,7 @@ function Widget({ call }: { call: ActiveCall }) {
 
   return (
     <div className="call-widget">
+      {!call.expanded && !call.poppedOut && <ModeratorRequestsBar call={call} compact />}
       <div className="cw-top">
         <button
           className="cw-head"

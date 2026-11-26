@@ -429,3 +429,75 @@ export async function davEvents(
   if (!res.ok && res.status !== 207) throw new Error(`HTTP ${res.status}`)
   return res.text()
 }
+
+/**
+ * Adds an email address to the user's account (Nextcloud's "additional email"). Nextcloud wants the
+ * password confirmed for this, which an app password doesn't do: with `password` (the user's login
+ * password, typed for this one request and not kept) the request is made with it instead.
+ */
+export async function addAccountEmail(
+  creds: Credentials,
+  userId: string,
+  email: string,
+  password?: string
+): Promise<{ ok: boolean; needsPassword: boolean; error?: string }> {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return { ok: false, needsPassword: false, error: 'Invalid address' }
+  let status: number
+  let error = ''
+  if (!password) {
+    const res = await ocsRequest(creds, {
+      accountId: creds.id,
+      method: 'PUT',
+      path: `/ocs/v2.php/cloud/users/${encodeURIComponent(userId)}`,
+      body: { key: 'additional_mail', value: email }
+    })
+    if (res.ok) return { ok: true, needsPassword: false }
+    status = res.status
+    error = res.error || `HTTP ${res.status}`
+  } else {
+    // A connection of its own without cookies: with the account's session cookie, Nextcloud would
+    // take the request as the app password's session and ignore the password
+    const fresh = withCertificateTrust(session.fromPartition(`hubbub-confirm-${Date.now()}`))
+    let res: Response
+    try {
+      res = await fresh.fetch(
+        buildUrl(creds.serverUrl, `/ocs/v2.php/cloud/users/${encodeURIComponent(userId)}`),
+        {
+          method: 'PUT',
+          headers: {
+            ...authHeaders({ ...creds, appPassword: password }),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ key: 'additional_mail', value: email }),
+          signal: AbortSignal.timeout(30_000)
+        }
+      )
+    } catch (err) {
+      const timedOut = err instanceof Error && err.name === 'TimeoutError'
+      return { ok: false, needsPassword: false, error: timedOut ? 'Nextcloud didn’t answer' : String(err) }
+    } finally {
+      void fresh.clearStorageData().catch(() => undefined)
+    }
+    if (res.ok) return { ok: true, needsPassword: false }
+    status = res.status
+    try {
+      error = ((await res.json()) as { ocs?: { meta?: { message?: string } } }).ocs?.meta?.message || ''
+    } catch {
+      // Not JSON
+    }
+    error ||= `HTTP ${status}`
+  }
+  const needsPassword = /password confirmation/i.test(error)
+  return { ok: false, needsPassword, error: status === 401 && password ? 'Wrong password' : error }
+}
+
+/** A whole calendar as one iCalendar file (Nextcloud's ?export), as text */
+export async function davExportCalendar(creds: Credentials, userId: string, href: string): Promise<string> {
+  const url = calendarUrl(creds, userId, href)
+  const res = await accountSession(creds.id).fetch(`${url.replace(/\/?$/, '/')}?export`, {
+    headers: { ...authHeaders(creds), Accept: 'text/calendar', 'Cache-Control': 'no-cache' }
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}

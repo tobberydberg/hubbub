@@ -144,10 +144,12 @@ export function invitationFileName(uid: string): string {
 export function scheduledByClient(ics: string, on: boolean): string {
   const calendar = new ICAL.Component(ICAL.parse(ics))
   for (const v of calendar.getAllSubcomponents('vevent')) {
-    const organizer = v.getFirstProperty('organizer')
-    if (!organizer) continue
-    if (on) organizer.setParameter('schedule-agent', 'CLIENT')
-    else organizer.removeParameter('schedule-agent')
+    // The organizer's mark keeps your answers to yourself; the invitees' marks keep a meeting you
+    // organize from inviting them
+    for (const p of [...v.getAllProperties('organizer'), ...v.getAllProperties('attendee')]) {
+      if (on) p.setParameter('schedule-agent', 'CLIENT')
+      else p.removeParameter('schedule-agent')
+    }
   }
   return calendar.toString()
 }
@@ -205,4 +207,17 @@ export function myAnswerIn(ics: string, myEmails: string[]): string | undefined 
   const me = master?.getAllProperties('attendee').find((a) => mine.has(emailIn(a)))
   const partstat = me?.getParameter('partstat')
   return typeof partstat === 'string' ? partstat.toUpperCase() : undefined
+}
+
+/** Whether you organize the meeting (by any of your addresses) */
+export function organizedByMe(ics: string, myEmails: string[]): boolean {
+  const mine = new Set(myEmails.map((e) => e.toLowerCase()))
+  try {
+    const calendar = new ICAL.Component(ICAL.parse(ics))
+    return calendar
+      .getAllSubcomponents('vevent')
+      .some((v) => mine.has(emailIn(v.getFirstProperty('organizer'))))
+  } catch {
+    return false
+  }
 }

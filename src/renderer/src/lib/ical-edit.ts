@@ -30,6 +30,27 @@ export interface EventDraft {
   repeat: Repeat
   /** Invited people, the organizer not included */
   attendees: Invitee[]
+  /** Invitees may forward the invitation (Outlook/Teams respect this); undefined keeps what's stored */
+  forwarding?: boolean
+  /** Invitees may propose a new time (Outlook/Teams); undefined keeps what's stored */
+  proposals?: boolean
+}
+
+// Outlook's meeting options, as Exchange writes them into invitations (MS-OXCICAL)
+const NO_FORWARD = 'x-microsoft-donotforwardmeeting'
+const NO_COUNTER = 'x-microsoft-disallow-counter'
+
+/** The invitation options of a stored event: whether invitees may forward it or propose a new time */
+export function optionsOf(master: ICAL.Component): { forwarding: boolean; proposals: boolean } {
+  const on = (name: string): boolean =>
+    String(master.getFirstPropertyValue(name) ?? '').toUpperCase() === 'TRUE'
+  return { forwarding: !on(NO_FORWARD), proposals: !on(NO_COUNTER) }
+}
+
+function setOption(vevent: ICAL.Component, name: string, allowed: boolean | undefined): void {
+  if (allowed === undefined) return
+  vevent.removeAllProperties(name)
+  if (!allowed) vevent.addPropertyWithValue(name, 'TRUE')
 }
 
 export interface Organizer {
@@ -140,6 +161,8 @@ function apply(vevent: ICAL.Component, draft: EventDraft, organizer: Organizer |
   setRepeat(vevent, draft.repeat, draft.allDay)
   setAttendees(vevent, draft.attendees, organizer)
   setReminder(vevent, draft.reminder, draft.title)
+  setOption(vevent, NO_FORWARD, draft.forwarding)
+  setOption(vevent, NO_COUNTER, draft.proposals)
   vevent.updatePropertyWithValue('dtstamp', utcNow())
   vevent.updatePropertyWithValue('last-modified', utcNow())
 }
@@ -158,6 +181,9 @@ export function newEventIcs(draft: EventDraft, uid: string, organizer: Organizer
   calendar.addSubcomponent(vevent)
   return calendar.toString()
 }
+
+const parseStoredEvents = (calendar: ICAL.Component): ICAL.Component[] =>
+  calendar.getAllSubcomponents('vevent')
 
 const masterOf = (calendar: ICAL.Component): ICAL.Component | undefined =>
   calendar.getAllSubcomponents('vevent').find((v) => !v.hasProperty('recurrence-id'))
@@ -203,6 +229,13 @@ export function updateEventIcs(
     end = start + (draft.end - draft.start)
   }
   apply(master, { ...draft, start, end }, organizer)
+  // Imported meetings you organize are kept from inviting everyone (SCHEDULE-AGENT=CLIENT); editing
+  // one is when the invitees should hear from you again
+  for (const v of parseStoredEvents(calendar)) {
+    for (const p of [...v.getAllProperties('organizer'), ...v.getAllProperties('attendee')]) {
+      p.removeParameter('schedule-agent')
+    }
+  }
   master.updatePropertyWithValue('sequence', Number(master.getFirstPropertyValue('sequence') ?? 0) + 1)
   return calendar.toString()
 }
@@ -306,6 +339,7 @@ export function setAnswerIcs(ics: string, myEmails: string[], answer: Answer, re
     vevent.getFirstProperty('organizer')?.removeParameter('schedule-agent')
     for (const attendee of vevent.getAllProperties('attendee')) {
       if (!mine.has(emailOf(attendee))) continue
+      attendee.removeParameter('schedule-agent')
       attendee.setParameter('partstat', answer)
       attendee.removeParameter('rsvp')
       attendee.removeParameter('schedule-status')
