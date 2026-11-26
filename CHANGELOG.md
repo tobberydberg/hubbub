@@ -6,6 +6,11 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-26
+
+More of the meeting inside the call (everyone's video, the people and the chat beside it, asking to moderate),
+meeting chats you can keep, calendar files, and your aliases as yours.
+
 ### Added
 
 - In calls with many people, the "+N more" tile shows everyone: the grid then keeps tiles at a usable size and
@@ -349,7 +354,8 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/tobberydberg/hubbub/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tobberydberg/hubbub/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tobberydberg/hubbub/compare/v0.3.0...v0.4.0
