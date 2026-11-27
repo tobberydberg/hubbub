@@ -6,6 +6,11 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-27
+
+Your private calendars beside your work ones (with busy time for colleagues), and your Nextcloud's AI in its own
+view: chat, every tool it offers, and the model you want.
+
 ### Added
 
 - Calendars from elsewhere beside your Nextcloud calendars: a calendar link (Google's secret address, an iCloud
@@ -398,7 +403,8 @@ First release: a Mattermost-style desktop client for Nextcloud Talk on macOS, Wi
 - Update checks against GitHub Releases. Windows and the Linux AppImage update automatically; the unsigned
   macOS build links to the new release instead.
 
-[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/tobberydberg/hubbub/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/tobberydberg/hubbub/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/tobberydberg/hubbub/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tobberydberg/hubbub/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tobberydberg/hubbub/compare/v0.4.0...v0.5.0
