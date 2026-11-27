@@ -16,7 +16,7 @@ import { toPlainText } from '@renderer/lib/messages'
 import { isGroupMessage, roomTitle } from '@renderer/lib/rooms'
 import { formatUntil } from '@renderer/lib/status'
 import { setApp, type AccountState } from '@renderer/store/app'
-import { useCalendar } from '@renderer/store/calendar'
+import { allCalendars, useCalendar } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
 import { openRoom, showThreadsView } from '@renderer/sync/actions'
 import { absentToday } from '@renderer/sync/absence'
@@ -59,7 +59,7 @@ export function TodayView({ account }: { account: AccountState }) {
   }, [accountId])
 
   const colorOf = (e: CalendarEvent): string | undefined =>
-    cal?.calendars?.find((c) => c.href === e.calendarHref)?.color
+    allCalendars(cal).find((c) => c.href === e.calendarHref)?.color
   const first = account.user?.displayname?.split(' ')[0] ?? account.info.displayName.split(' ')[0]
 
   // Meetings: the rest of today, and tomorrow's

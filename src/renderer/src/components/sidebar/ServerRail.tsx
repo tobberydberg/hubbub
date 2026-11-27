@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { Calendar, MessagesSquare, Plus } from 'lucide-react'
+import { Calendar, MessagesSquare, Plus, Sparkles } from 'lucide-react'
+import { toolTypes } from '@renderer/lib/ai-tasks'
 import { initials } from '@renderer/lib/messages'
 import { setApp, useApp } from '@renderer/store/app'
 import { reorderAccounts, selectAccount } from '@renderer/sync/actions'
 import { openInvitations, showCalendar } from '@renderer/sync/calendar'
 import { useCalendar } from '@renderer/store/calendar'
 import { accountTotals } from '@renderer/sync/engine'
+import { useAiTaskTypes } from '@renderer/sync/ai'
+import { showAssistant } from '@renderer/sync/assistant'
 
 const shortcut = window.hubbub.platform === 'darwin' ? '⌘' : 'Ctrl+'
 
@@ -18,6 +21,23 @@ function InvitationBadge({ accountId }: { accountId: string }) {
       {n}
     </span>
   ) : null
+}
+
+/** The switch to the AI assistant, when the server has AI */
+function AssistantMode({ accountId, on }: { accountId: string; on: boolean }) {
+  const types = useAiTaskTypes(accountId)
+  if (!on && (!types || !toolTypes(types).length)) return null
+  return (
+    <button
+      role="tab"
+      aria-selected={on}
+      className={`server-mode${on ? ' on' : ''}`}
+      title="Assistant (AI)"
+      onClick={() => showAssistant(accountId)}
+    >
+      <Sparkles size={18} strokeWidth={1.75} />
+    </button>
+  )
 }
 
 export function ServerRail() {
@@ -42,6 +62,7 @@ export function ServerRail() {
         const active = id === activeId
         const title = `${a.info.label} — ${a.info.serverUrl.replace(/^https?:\/\//, '')}${i < 9 ? ` (${shortcut}${i + 1})` : ''}`
         const calendar = a.view === 'calendar'
+        const ai = a.view === 'assistant'
         return (
           <div key={id} className="server-slot">
             <button
@@ -67,11 +88,15 @@ export function ServerRail() {
               )}
             </button>
             {active && (
-              <div className="server-modes" role="tablist" aria-label={`${a.info.label}: chat or calendar`}>
+              <div
+                className="server-modes"
+                role="tablist"
+                aria-label={`${a.info.label}: chat, calendar or assistant`}
+              >
                 <button
                   role="tab"
-                  aria-selected={!calendar}
-                  className={`server-mode${calendar ? '' : ' on'}`}
+                  aria-selected={!calendar && !ai}
+                  className={`server-mode${calendar || ai ? '' : ' on'}`}
                   title="Chat"
                   onClick={() => showCalendar(id, false)}
                 >
@@ -88,6 +113,7 @@ export function ServerRail() {
                   <span className="server-mode-date">{new Date().getDate()}</span>
                   <InvitationBadge accountId={id} />
                 </button>
+                <AssistantMode accountId={id} on={ai} />
               </div>
             )}
           </div>

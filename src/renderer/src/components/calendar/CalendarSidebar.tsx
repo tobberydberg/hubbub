@@ -1,5 +1,16 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, Plus, Upload, Video } from 'lucide-react'
+import {
+  CalendarPlus,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Plus,
+  Settings2,
+  Upload,
+  Video
+} from 'lucide-react'
 import type { Answer, CalendarEvent, CalendarInfo } from '@renderer/lib/caldav'
 import {
   addMonths,
@@ -16,6 +27,7 @@ import { answerInvitation } from '@renderer/sync/calendar-edit'
 import { setApp, useActiveAccount } from '@renderer/store/app'
 import { useCalendar } from '@renderer/store/calendar'
 import { useCall } from '@renderer/store/call'
+import { useExternal } from '@renderer/store/external'
 import { usePrefs } from '@renderer/store/prefs'
 import {
   joinEventCall,
@@ -67,6 +79,12 @@ export function CalendarSidebar() {
             <Download size={14} /> Export .ics…
           </button>
         </div>
+        <button
+          className="cal-side-link"
+          onClick={() => setApp({ modal: { type: 'calendar-source', accountId } })}
+        >
+          <CalendarPlus size={14} /> Add a calendar from elsewhere…
+        </button>
       </div>
       <CallWidget />
     </aside>
@@ -140,6 +158,7 @@ function MiniMonth({ accountId }: { accountId: string }) {
 }
 
 const NONE: string[] = []
+const NONE_CALENDARS: CalendarInfo[] = []
 
 /** The rest of the invitations are behind "Show more", so the month and calendars stay in view */
 const INVITATIONS_SHOWN = 3
@@ -209,7 +228,10 @@ function Invitations({ accountId }: { accountId: string }) {
 
 function CalendarList({ accountId }: { accountId: string }) {
   const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)
+  const external = useCalendar((s) => s.accounts[accountId]?.external) ?? NONE_CALENDARS
   const error = useCalendar((s) => s.accounts[accountId]?.error)
+  const sources = useExternal((s) => s.sources)
+  const status = useExternal((s) => s.status)
   // Selected as stored: a fresh [] on every read would re-render forever
   const hidden = usePrefs((s) => s.hiddenCalendars[accountId]) ?? NONE
   const toggle = (href: string): void => {
@@ -218,43 +240,97 @@ function CalendarList({ accountId }: { accountId: string }) {
     usePrefs.getState().set({ hiddenCalendars: { ...all, [accountId]: now } })
   }
   if (!calendars) return error ? <p className="cal-side-note">{error}</p> : null
-  const own = calendars.filter((c) => !c.sharedBy)
+  const own = calendars.filter((c) => !c.sharedBy && !c.subscription)
   const shared = calendars.filter((c) => c.sharedBy)
-  const item = (c: CalendarInfo): React.ReactNode => {
+  const subscriptions = calendars.filter((c) => c.subscription)
+  const mine = sources.filter((s) => s.accountId === accountId)
+  const edit = (sourceId: string): void => setApp({ modal: { type: 'calendar-source', accountId, sourceId } })
+  const item = (c: CalendarInfo, note?: string, onEdit?: () => void): React.ReactNode => {
     const on = !hidden.includes(c.href)
     return (
-      <button
-        key={c.href}
-        className="cal-item"
-        role="checkbox"
-        aria-checked={on}
-        onClick={() => toggle(c.href)}
-      >
-        <span
-          className="cal-swatch"
-          style={on ? { background: c.color, borderColor: c.color } : { borderColor: c.color }}
-        >
-          {on && <Check size={11} strokeWidth={3.5} />}
-        </span>
-        <span className="cal-item-name">{c.name}</span>
-        {c.sharedBy ? (
-          <span className="cal-item-note">{c.sharedBy}</span>
-        ) : (
-          !c.writable && <span className="cal-item-note">read-only</span>
+      <div key={c.href} className="cal-item-row">
+        <button className="cal-item" role="checkbox" aria-checked={on} onClick={() => toggle(c.href)}>
+          <span
+            className="cal-swatch"
+            style={on ? { background: c.color, borderColor: c.color } : { borderColor: c.color }}
+          >
+            {on && <Check size={11} strokeWidth={3.5} />}
+          </span>
+          <span className="cal-item-name">{c.name}</span>
+          {note !== undefined ? (
+            note && <span className="cal-item-note">{note}</span>
+          ) : c.sharedBy ? (
+            <span className="cal-item-note">{c.sharedBy}</span>
+          ) : (
+            !c.writable && !c.subscription && <span className="cal-item-note">read-only</span>
+          )}
+        </button>
+        {onEdit && (
+          <button className="cal-item-edit" title="Settings" onClick={onEdit}>
+            <Settings2 size={13} />
+          </button>
         )}
-      </button>
+      </div>
     )
   }
   return (
     <>
       <div className="cal-section">
         <div className="cal-section-title">My calendars</div>
-        {own.length ? own.map(item) : <p className="cal-side-note">No calendars yet</p>}
+        {own.length ? own.map((c) => item(c)) : <p className="cal-side-note">No calendars yet</p>}
       </div>
       {shared.length > 0 && (
         <div className="cal-section">
           <div className="cal-section-title">Shared with me</div>
-          {shared.map(item)}
+          {shared.map((c) => item(c))}
+        </div>
+      )}
+      {subscriptions.length > 0 && (
+        <div className="cal-section">
+          <div className="cal-section-title">Subscriptions</div>
+          {subscriptions.map((c) => item(c))}
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="cal-section">
+          <div className="cal-section-title">Other calendars</div>
+          {mine.map((source) => {
+            const list = external.filter((c) => c.source?.id === source.id)
+            const failed = status[source.id]?.error
+            const problem = failed ?? status[source.id]?.busy?.error
+            return (
+              <Fragment key={source.id}>
+                {source.kind === 'link' ? (
+                  list.length ? (
+                    list.map((c) => item(c, '', () => edit(source.id)))
+                  ) : (
+                    <div className="cal-item-row">
+                      <span className="cal-item cal-source-name">{source.name}</span>
+                      <button className="cal-item-edit" title="Settings" onClick={() => edit(source.id)}>
+                        <Settings2 size={13} />
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <div className="cal-item-row">
+                      <span className="cal-source-name">{source.name}</span>
+                      <button className="cal-item-edit" title="Settings" onClick={() => edit(source.id)}>
+                        <Settings2 size={13} />
+                      </button>
+                    </div>
+                    {list.map((c) => item(c, ''))}
+                  </>
+                )}
+                {problem && (
+                  <p className="cal-side-note error" title={problem}>
+                    {failed ? 'Couldn’t be checked: ' : 'Busy time: '}
+                    {problem}
+                  </p>
+                )}
+              </Fragment>
+            )
+          })}
         </div>
       )}
     </>

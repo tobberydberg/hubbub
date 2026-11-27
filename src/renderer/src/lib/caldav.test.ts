@@ -28,6 +28,11 @@ const list = `<?xml version="1.0"?>
   <d:displayname>Tasks</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
   <cal:supported-calendar-component-set><cal:comp name="VTODO"/></cal:supported-calendar-component-set>
  </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+ <d:response><d:href>/remote.php/dav/calendars/alice/contact_birthdays/</d:href><d:propstat><d:prop>
+  <d:displayname>Contact birthdays</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+  <oc:owner-principal>principals/users/alice</oc:owner-principal>
+  <d:current-user-privilege-set><d:privilege><d:write-properties/></d:privilege><d:privilege><d:read/></d:privilege></d:current-user-privilege-set>
+ </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
  <d:response><d:href>/remote.php/dav/calendars/alice/inbox/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><cal:schedule-inbox/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
 </d:multistatus>`
 
@@ -93,14 +98,24 @@ describe('parseCalendarList', () => {
   const calendars = parseCalendarList(list, 'alice')
 
   it('keeps event calendars, in the user’s order', () => {
-    expect(calendars.map((c) => c.name)).toEqual(['Team on-call', 'Personal', 'Work'])
+    expect(calendars.map((c) => c.name)).toEqual(['Contact birthdays', 'Team on-call', 'Personal', 'Work'])
   })
 
   it('reads colors, write access, sharing and the change tag', () => {
-    const [shared, personal, work] = calendars
+    const [birthdays, shared, personal, work] = calendars
+    // Allowed to rename it (write-properties), not to write events into it
+    expect(birthdays.writable).toBe(false)
     expect(work).toMatchObject({ color: '#2E9E6B', writable: true, ctag: 'http://sabre.io/ns/sync/7' })
     expect(personal).toMatchObject({ color: '#0082c9', writable: true, sharedBy: undefined })
     expect(shared).toMatchObject({ sharedBy: 'Bob Test', writable: false })
+  })
+
+  it('lists Nextcloud subscriptions as read-only calendars', () => {
+    const [sub] = parseCalendarList(
+      `<d:multistatus xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/"><d:response><d:href>/remote.php/dav/calendars/alice/holidays/</d:href><d:propstat><d:prop><d:displayname>Holidays</d:displayname><d:resourcetype><d:collection/><cs:subscribed/></d:resourcetype><cs:source><d:href>https://example.com/h.ics</d:href></cs:source><cs:getctag>5</cs:getctag><d:current-user-privilege-set><d:privilege><d:all/></d:privilege></d:current-user-privilege-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`,
+      'alice'
+    )
+    expect(sub).toMatchObject({ name: 'Holidays', subscription: true, writable: false, ctag: '5' })
   })
 })
 

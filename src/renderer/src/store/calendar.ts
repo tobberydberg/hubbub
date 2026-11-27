@@ -16,6 +16,8 @@ export interface EventSet {
 
 export interface AccountCalendars {
   calendars: CalendarInfo[] | null
+  /** Calendars from elsewhere that Hubbub reads itself (a link, iCloud), shown with these */
+  external: CalendarInfo[]
   error?: string
   /** The range on screen */
   view: EventSet | null
@@ -38,6 +40,7 @@ export const useCalendar = create<CalendarStore>()(
 
 export const emptyCalendars = (): AccountCalendars => ({
   calendars: null,
+  external: [],
   view: null,
   upcoming: null,
   invitations: null,
@@ -48,6 +51,11 @@ export function updateCalendars(accountId: string, fn: (a: AccountCalendars) => 
   useCalendar.setState((s) => {
     fn((s.accounts[accountId] ??= emptyCalendars()))
   })
+}
+
+/** A server's calendars and the ones from elsewhere shown with them */
+export function allCalendars(a: AccountCalendars | undefined): CalendarInfo[] {
+  return [...(a?.calendars ?? []), ...(a?.external ?? [])]
 }
 
 /** All events of a set, in shown calendars only */

@@ -84,6 +84,11 @@ interface PrefsState {
   filesPickerFolder: Record<string, string>
   /** The language messages were translated to last */
   translateTo: string | null
+  /**
+   * The AI options for everything Hubbub asks a server's AI, per server: the model, the answer
+   * length, … (task inputs many tasks share); one left out is the server's default
+   */
+  aiOptions: Record<string, Record<string, string | number>>
   /** Conversations joined through their link, per server (Talk drops you from them when you leave) */
   visitedRooms: Record<string, VisitedRoom[]>
   /** Call view: everyone the same size, or the speaker large */
@@ -140,6 +145,7 @@ export const usePrefs = create<PrefsState>()(
       rhsWidth: null,
       filesPickerFolder: {},
       translateTo: null,
+      aiOptions: {},
       visitedRooms: {},
       lastAccountId: null,
       lastRooms: {},

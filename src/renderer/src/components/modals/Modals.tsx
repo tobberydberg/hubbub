@@ -23,6 +23,7 @@ import { getSync, roomMentionCount } from '@renderer/sync/engine'
 import { cachedPeople, loadDirectory, usePeopleSearch } from '@renderer/sync/people'
 import { leftVisited, reopenByLink } from '@renderer/sync/visited'
 import { Avatar } from '../common/Avatar'
+import { ColorPicker } from '../common/ColorPicker'
 import { Modal } from '../common/Modal'
 import { RoomIcon } from '../sidebar/Sidebar'
 import { CertificateDetails } from '../common/Certificate'
@@ -35,6 +36,7 @@ import { EventDialog } from '../calendar/EventDialog'
 import { PollModal } from './PollModal'
 import { StatusModal } from './StatusModal'
 import { CalendarIoDialog } from '../calendar/CalendarIoDialog'
+import { CalendarSourceDialog } from '../calendar/CalendarSourceDialog'
 import { FilesPickerModal } from './FilesPicker'
 import { OutOfOfficeModal } from './OutOfOfficeModal'
 
@@ -51,11 +53,19 @@ export function ModalHost() {
     case 'certificate':
       return <CertificateModal modal={modal} />
     case 'settings':
-      return <SettingsModal onClose={close} />
+      return <SettingsModal onClose={close} initialTab={modal.tab} />
     case 'status':
       return <StatusModal accountId={modal.accountId} />
     case 'calendar-io':
       return <CalendarIoDialog accountId={modal.accountId} mode={modal.mode} />
+    case 'calendar-source':
+      return (
+        <CalendarSourceDialog
+          key={`${modal.accountId}:${modal.sourceId ?? 'new'}`}
+          accountId={modal.accountId}
+          sourceId={modal.sourceId}
+        />
+      )
     case 'out-of-office':
       return <OutOfOfficeModal accountId={modal.accountId} />
     case 'files-picker':
@@ -797,17 +807,7 @@ function ServerSettingsModal({ accountId }: { accountId: string }) {
       </div>
       <div className="field">
         <label>Color</label>
-        <div className="color-row">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              className={`color-swatch${color === c ? ' selected' : ''}`}
-              style={{ background: c }}
-              onClick={() => setColor(c)}
-              aria-label={c}
-            />
-          ))}
-        </div>
+        <ColorPicker colors={COLORS} value={color} onChange={setColor} />
       </div>
     </Modal>
   )

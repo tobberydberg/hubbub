@@ -1,7 +1,14 @@
 import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DesktopSettings, ImapSettings, OcsRequest, UploadRequest, UploadResult } from '@shared/ipc'
+import type {
+  CalendarSourceInput,
+  DesktopSettings,
+  ImapSettings,
+  OcsRequest,
+  UploadRequest,
+  UploadResult
+} from '@shared/ipc'
 import {
   addWithAppPassword,
   cancelLogin,
@@ -63,6 +70,16 @@ import {
   ocsRequest
 } from './http'
 import { openIcs, saveIcs } from './ics-files'
+import {
+  listSources,
+  removeSource,
+  removeSourcesOf,
+  saveSource,
+  sourceCalendars,
+  sourceEvents,
+  sourceFeed,
+  testSource
+} from './calendar-sources'
 import { getImapSettings, imapInvitations, removeImapSettings, setImapSettings, testImap } from './imap'
 import { handleMediaProtocol, registerMediaScheme } from './media'
 import { buildMenu } from './menu'
@@ -242,6 +259,7 @@ function registerIpc(): void {
   })
   handle('accounts:remove', (id: string) => {
     removeImapSettings(id)
+    removeSourcesOf(id)
     return removeAccount(id)
   })
 
@@ -253,6 +271,18 @@ function registerIpc(): void {
     if (!account) throw new Error('Unknown account')
     return davCalendars(getCredentials(accountId), account.userId)
   })
+  handle('sources:list', () => listSources())
+  handle('sources:test', (input: CalendarSourceInput) => testSource(input))
+  handle('sources:save', (input: CalendarSourceInput) => {
+    if (!getAccount(input.accountId)) throw new Error('Unknown account')
+    return saveSource(input)
+  })
+  handle('sources:remove', (id: string) => removeSource(id))
+  handle('sources:feed', (id: string, tag?: string) => sourceFeed(id, tag))
+  handle('sources:calendars', (id: string) => sourceCalendars(id))
+  handle('sources:events', (id: string, href: string, start: string, end: string) =>
+    sourceEvents(id, href, start, end)
+  )
   handle('imap:get', (accountId: string) => getImapSettings(accountId))
   handle('imap:set', (accountId: string, settings: ImapSettings, password?: string) => {
     if (!getAccount(accountId)) throw new Error('Unknown account')

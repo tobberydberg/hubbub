@@ -12,6 +12,7 @@ import { usePrefs } from './store/prefs'
 import { bootstrap } from './sync/engine'
 import { startPresence } from './sync/presence'
 import { startCalendarSync } from './sync/calendar'
+import { startExternalSync } from './sync/external'
 import { startMailInvitationSync } from './sync/mail-invitations'
 import { App } from './App'
 
@@ -19,6 +20,7 @@ applyTheme(usePrefs.getState().theme)
 void bootstrap()
 startPresence()
 startCalendarSync()
+startExternalSync()
 startMailInvitationSync()
 // Leave the call properly when the app quits
 window.hubbub.calls.onHangup(() => void leaveCall().finally(() => window.hubbub.calls.setActive(false)))

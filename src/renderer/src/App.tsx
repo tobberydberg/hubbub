@@ -23,6 +23,8 @@ import { reviewCertificate, Sidebar, signInAgain } from './components/sidebar/Si
 import logoUrl from './assets/logo.svg'
 import { CalendarSidebar } from './components/calendar/CalendarSidebar'
 import { CalendarView } from './components/calendar/CalendarView'
+import { AssistantSidebar } from './components/assistant/AssistantSidebar'
+import { AssistantView } from './components/assistant/AssistantView'
 import { SidebarResizer, useSidebarWidth } from './components/sidebar/SidebarResizer'
 
 const isMac = window.hubbub.platform === 'darwin'
@@ -240,6 +242,11 @@ export function App() {
     const a = s.activeAccountId ? s.accounts[s.activeAccountId] : undefined
     return a?.view === 'calendar' ? a : undefined
   })
+  // … or its AI assistant
+  const assistant = useApp((s) => {
+    const a = s.activeAccountId ? s.accounts[s.activeAccountId] : undefined
+    return a?.view === 'assistant' ? a.info.id : undefined
+  })
 
   return (
     <div className={`app${isMac ? ' is-mac' : ''}`}>
@@ -251,13 +258,25 @@ export function App() {
         ) : (
           <>
             <ServerRail />
-            {calendar ? <CalendarSidebar /> : <Sidebar />}
+            {calendar ? (
+              <CalendarSidebar />
+            ) : assistant ? (
+              <AssistantSidebar accountId={assistant} />
+            ) : (
+              <Sidebar />
+            )}
             <SidebarResizer onDrag={setDragWidth} />
             {callExpanded ? (
               <CallView />
             ) : (
               <>
-                {calendar ? <CalendarView account={calendar} /> : <Center />}
+                {calendar ? (
+                  <CalendarView account={calendar} />
+                ) : assistant ? (
+                  <AssistantView accountId={assistant} />
+                ) : (
+                  <Center />
+                )}
                 <Rhs />
               </>
             )}

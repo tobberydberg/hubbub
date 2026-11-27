@@ -3,7 +3,8 @@ import { Copy, RefreshCw, Sparkles } from 'lucide-react'
 import { toPlainText, belongsTo } from '@renderer/lib/messages'
 import { chatKey, useApp } from '@renderer/store/app'
 import { copyText } from '@renderer/sync/actions'
-import { aiErrorText, summarizeChat, summarizeText } from '@renderer/sync/ai'
+import { stageText } from '@renderer/lib/ai-tasks'
+import { aiErrorText, summarizeChat, summarizeText, type TaskUpdate } from '@renderer/sync/ai'
 import { MessageText } from '../channel/MessageText'
 
 // A summary by the server's AI, in the side panel: of what you missed in a conversation (Talk's own
@@ -23,6 +24,7 @@ export function SummaryPanel({
   const [summary, setSummary] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [parts, setParts] = useState(0)
+  const [update, setUpdate] = useState<TaskUpdate | null>(null)
   const [run, setRun] = useState(0)
 
   useEffect(() => {
@@ -30,9 +32,13 @@ export function SummaryPanel({
     setSummary(null)
     setError(null)
     setParts(0)
+    setUpdate(null)
+    const onUpdate = (u: TaskUpdate): void => {
+      if (!abort.signal.aborted) setUpdate(u)
+    }
     const work = rootId
-      ? summarizeText(accountId, threadText(accountId, token, rootId), abort.signal)
-      : summarizeChat(accountId, token, fromMessageId ?? 0, abort.signal, setParts)
+      ? summarizeText(accountId, threadText(accountId, token, rootId), abort.signal, onUpdate)
+      : summarizeChat(accountId, token, fromMessageId ?? 0, abort.signal, setParts, onUpdate)
     work
       .then((s) => !abort.signal.aborted && setSummary(s))
       .catch((err: unknown) => {
@@ -68,6 +74,13 @@ export function SummaryPanel({
             Try again
           </button>
         </div>
+      ) : update?.partial ? (
+        <>
+          <div className="summary-note">
+            <Sparkles size={14} /> Writing{parts ? ` part ${parts + 1}` : ''}…
+          </div>
+          <MessageText markdown={update.partial} className="summary-text" />
+        </>
       ) : (
         <div className="empty-state">
           <div className="spinner" />
@@ -75,6 +88,7 @@ export function SummaryPanel({
             Summarizing{parts ? ` (part ${parts + 1})` : ''}… This can take a moment, depending on how busy
             your server’s AI is.
           </p>
+          {update && <p className="summary-stage">{stageText(update.stage)}</p>}
         </div>
       )}
     </div>

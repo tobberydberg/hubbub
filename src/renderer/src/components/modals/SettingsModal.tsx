@@ -9,17 +9,20 @@ import {
   Phone,
   RefreshCw,
   Copy,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Sparkles
 } from 'lucide-react'
 import type { DesktopSettings, ImapSettings, TrustedCertificate } from '@shared/ipc'
 import { THEMES } from '@renderer/lib/themes'
-import { useApp } from '@renderer/store/app'
+import { setApp, useApp } from '@renderer/store/app'
+import { useExternal } from '@renderer/store/external'
 import { setBackgroundBlur, switchCamera, switchMicrophone, switchSpeaker } from '@renderer/calls/call'
 import { deviceLabel, playTestSound, useMediaDevices } from '@renderer/calls/devices'
 import { usePrefs, type ThemeName } from '@renderer/store/prefs'
 import { useCalendar } from '@renderer/store/calendar'
 import { mailOnlyAddresses, refreshCalendars, reloadMyAddresses } from '@renderer/sync/calendar'
 import { AddAddress } from '../calendar/AddAddress'
+import { AiSettings } from './AiSettings'
 import {
   forgetHandledMail,
   mailInvitationState,
@@ -32,14 +35,23 @@ import { clearMailDebug, mailDebugText, useMailDebug } from '@renderer/sync/mail
 import { copyText } from '@renderer/sync/actions'
 import { Modal, Toggle } from '../common/Modal'
 
-type Tab = 'display' | 'notifications' | 'sidebar' | 'calls' | 'calendar' | 'desktop' | 'advanced' | 'about'
+type Tab =
+  | 'display'
+  | 'notifications'
+  | 'sidebar'
+  | 'calls'
+  | 'calendar'
+  | 'ai'
+  | 'desktop'
+  | 'advanced'
+  | 'about'
 
 const isMac = window.hubbub.platform === 'darwin'
 
 const REPO_URL = 'https://github.com/tobberydberg/hubbub'
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('display')
+export function SettingsModal({ onClose, initialTab }: { onClose: () => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'display')
   const prefs = usePrefs()
   const [version, setVersion] = useState('')
 
@@ -53,6 +65,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     { id: 'sidebar', label: 'Sidebar', icon: <LayoutList size={16} /> },
     { id: 'calls', label: 'Calls', icon: <Phone size={16} /> },
     { id: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
+    { id: 'ai', label: 'AI', icon: <Sparkles size={16} /> },
     { id: 'desktop', label: 'Desktop', icon: <Monitor size={16} /> },
     { id: 'advanced', label: 'Advanced', icon: <SlidersHorizontal size={16} /> },
     { id: 'about', label: 'About', icon: <Info size={16} /> }
@@ -170,6 +183,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <>
               <DefaultCalendars />
               <MyAddresses />
+              <OtherCalendars />
               <MailInvitations />
               <Row title="Show week numbers" sub="In the small month, and in the week and month views">
                 <Toggle
@@ -188,6 +202,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               </Row>
             </>
           )}
+
+          {tab === 'ai' && <AiSettings onClose={onClose} />}
 
           {tab === 'desktop' && <DesktopTab />}
 
@@ -657,6 +673,71 @@ function ImapSettingsForm({ accountId }: { accountId: string }) {
 }
 
 /** Per server: the addresses your calendar knows as yours, and adding one */
+/** Per server: calendars from elsewhere (a link, iCloud, CalDAV) shown in its calendar */
+function OtherCalendars() {
+  const order = useApp((s) => s.accountOrder)
+  const accounts = useApp((s) => s.accounts)
+  const sources = useExternal((s) => s.sources)
+  const status = useExternal((s) => s.status)
+  const KIND = { link: 'Calendar link', icloud: 'iCloud', caldav: 'CalDAV' }
+  return (
+    <>
+      {order.map((id) => {
+        const mine = sources.filter((s) => s.accountId === id)
+        return (
+          <div key={id} className="setting-row other-calendars">
+            <div className="sr-label">
+              <div className="sr-title">
+                Calendars from elsewhere{order.length > 1 ? ` · ${accounts[id]?.info.label}` : ''}
+              </div>
+              <div className="sr-sub">
+                Your Google, iCloud or Outlook calendar beside your Nextcloud calendars, read by Hubbub on
+                this computer: they never go through Nextcloud. Optionally, their busy time is copied into a
+                Nextcloud calendar, without details.
+              </div>
+              {mine.map((s) => {
+                const st = status[s.id]
+                return (
+                  <div key={s.id} className="other-calendar">
+                    <span
+                      className="other-calendar-dot"
+                      style={{ background: s.kind === 'link' ? s.color : undefined }}
+                    />
+                    <span className="other-calendar-name">{s.name}</span>
+                    <span className="other-calendar-note">
+                      {KIND[s.kind]} · {s.where}
+                      {s.busy ? ' · busy time to Nextcloud' : ''}
+                    </span>
+                    {(st?.error || st?.busy?.error) && (
+                      <span className="other-calendar-error" title={st.error ?? st.busy?.error}>
+                        {st.error ? 'Couldn’t be checked' : 'Busy time failed'}
+                      </span>
+                    )}
+                    <button
+                      className="ev-btn light"
+                      onClick={() =>
+                        setApp({ modal: { type: 'calendar-source', accountId: id, sourceId: s.id } })
+                      }
+                    >
+                      Change…
+                    </button>
+                  </div>
+                )
+              })}
+              <button
+                className="ev-btn light other-calendar-add"
+                onClick={() => setApp({ modal: { type: 'calendar-source', accountId: id } })}
+              >
+                Add a calendar…
+              </button>
+            </div>
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 function MyAddresses() {
   const order = useApp((s) => s.accountOrder)
   const accounts = useApp((s) => s.accounts)

@@ -16,7 +16,8 @@ export function CalendarIoDialog({ accountId, mode }: { accountId: string; mode:
   const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)
   const preferred = usePrefs((s) => s.defaultCalendars[accountId])
   const writable = useMemo(() => (calendars ?? []).filter((c) => c.writable), [calendars])
-  const all = calendars ?? []
+  // Not subscriptions: Nextcloud keeps only a copy of those, and the calendar link is their source
+  const all = useMemo(() => (calendars ?? []).filter((c) => !c.subscription), [calendars])
   const choices = mode === 'import' ? writable : all
   const [href, setHref] = useState(
     () =>

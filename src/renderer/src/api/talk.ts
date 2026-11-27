@@ -143,9 +143,19 @@ export interface AiTask {
   type: string
   /** STATUS_SCHEDULED, STATUS_RUNNING, STATUS_SUCCESSFUL, STATUS_FAILED, STATUS_CANCELLED, STATUS_UNKNOWN */
   status: string
+  input?: Record<string, unknown>
   output?: Record<string, unknown> | null
   errorMessage?: string | null
-  progress?: number
+  /** The error as the provider puts it for people (Nextcloud 31+) */
+  userFacingErrorMessage?: string | null
+  progress?: number | null
+  customId?: string | null
+  /** Unix times */
+  lastUpdated?: number
+  scheduledAt?: number | null
+  startedAt?: number | null
+  endedAt?: number | null
+  completionExpectedAt?: number | null
 }
 
 export interface NotificationAction {
@@ -437,19 +447,32 @@ export function talk(accountId: string) {
       post<{ taskId: number; nextOffset?: number } | null>(`${SPREED}/v1/chat/${token}/summarize`, {
         fromMessageId
       }),
-    taskTypes: () =>
-      get<{ types: Record<string, { name: string; description?: string }> }>(
-        '/ocs/v2.php/taskprocessing/tasktypes'
-      ),
-    scheduleTask: (type: string, input: Record<string, unknown>, customId?: string) =>
+    taskTypes: () => get<{ types: unknown }>('/ocs/v2.php/taskprocessing/tasktypes'),
+    /** preferStreaming: a text answer shows up in the task's output while it's written (Nextcloud 33+) */
+    scheduleTask: (
+      type: string,
+      input: Record<string, unknown>,
+      customId?: string,
+      preferStreaming = false
+    ) =>
       post<{ task: AiTask }>('/ocs/v2.php/taskprocessing/schedule', {
         type,
         input,
         appId: 'hubbub',
-        customId
+        customId,
+        ...(preferStreaming ? { preferStreaming: true } : {})
       }),
     task: (id: number) => get<{ task: AiTask }>(`/ocs/v2.php/taskprocessing/task/${id}`),
+    /** Removes a task (and stops it when it hasn't finished) */
     cancelTask: (id: number) => del(`/ocs/v2.php/taskprocessing/task/${id}`),
+    /** Stops a task but keeps it, so it shows as cancelled (Nextcloud 32+) */
+    stopTask: (id: number) => post<{ task: AiTask }>(`/ocs/v2.php/taskprocessing/tasks/${id}/cancel`),
+    /** Your tasks Hubbub scheduled with this custom id */
+    hubbubTasks: (customId: string) =>
+      get<{ tasks: AiTask[] }>('/ocs/v2.php/taskprocessing/tasks/app/hubbub', { query: { customId } }),
+    /** Where a scheduled task is in the queue, 1 being next (Nextcloud 35+); 412 once it runs */
+    taskQueuePosition: (id: number) =>
+      raw<number>(accountId, 'GET', `/ocs/v2.php/taskprocessing/tasks/${id}/queue_position`),
     translationLanguages: () =>
       get<{
         languages: { from: string; fromLabel: string; to: string; toLabel: string }[]
@@ -741,6 +764,14 @@ export function talk(accountId: string) {
         '/ocs/v2.php/cloud/capabilities'
       )
       return !!data.capabilities.user_status?.supports_busy
+    },
+    /** Nextcloud Assistant's version when it's installed and on for you, else null */
+    async assistantVersion(): Promise<string | null> {
+      const data = await get<{ capabilities: { assistant?: { version?: string; enabled?: boolean } } }>(
+        '/ocs/v2.php/cloud/capabilities'
+      )
+      const a = data.capabilities.assistant
+      return a && a.enabled !== false ? (a.version ?? '') : null
     }
   }
 }

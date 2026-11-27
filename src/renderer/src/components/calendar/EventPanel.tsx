@@ -56,7 +56,8 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
   useCalendar((s) => s.accounts[accountId])
   const event = findEvent(accountId, eventId)
   const calendars = useCalendar((s) => s.accounts[accountId]?.calendars)
-  const calendar = calendars?.find((c) => c.href === event?.calendarHref)
+  const external = useCalendar((s) => s.accounts[accountId]?.external)
+  const calendar = [...(calendars ?? []), ...(external ?? [])].find((c) => c.href === event?.calendarHref)
   const roomName = useApp((s) =>
     event?.talkToken ? s.accounts[accountId]?.rooms[event.talkToken]?.displayName : undefined
   )
@@ -167,6 +168,14 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
             ) : (
               <span className="event-calendar" style={{ ['--c' as string]: calendar.color }}>
                 {calendar.name}
+                {(calendar.source || calendar.subscription) && (
+                  <span className="event-calendar-note">
+                    {calendar.source && calendar.source.name !== calendar.name
+                      ? `${calendar.source.name} · `
+                      : ''}
+                    {calendar.subscription ? 'subscription · ' : ''}read-only
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -356,18 +365,22 @@ export function EventPanel({ accountId, eventId }: { accountId: string; eventId:
         </div>
       )}
 
-      <button
-        className="cal-side-link dark"
-        onClick={() => void window.hubbub.app.openExternal(nextcloudCalendarUrl(accountId, event.start))}
-      >
-        <ExternalLink size={14} /> Open in Nextcloud Calendar
-      </button>
+      {!calendar?.source && (
+        <button
+          className="cal-side-link dark"
+          onClick={() => void window.hubbub.app.openExternal(nextcloudCalendarUrl(accountId, event.start))}
+        >
+          <ExternalLink size={14} /> Open in Nextcloud Calendar
+        </button>
+      )}
     </div>
   )
 }
 
-/** The organizer is usually also an attendee; list each person once, the organizer first */
-/** Everyone once; you once too, with the answer you gave, when you're listed at several addresses */
+/**
+ * Everyone once, the organizer first (usually also an attendee); you once too, with the answer you
+ * gave, when you're listed at several addresses
+ */
 function dedupe(people: EventPerson[]): EventPerson[] {
   const seen = new Map<string, number>()
   const out: EventPerson[] = []

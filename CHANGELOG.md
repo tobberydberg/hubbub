@@ -6,6 +6,50 @@ All notable changes to Hubbub are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Calendars from elsewhere beside your Nextcloud calendars: a calendar link (Google's secret address, an iCloud
+  public calendar, an Outlook published calendar), an iCloud account (with an app-specific password) or another
+  CalDAV server. Hubbub reads them itself on your computer, so private calendars never go through Nextcloud; the
+  link and password are kept encrypted. They're read-only, show in the views, Today and the next-meeting strip,
+  and are added and changed from the calendar's sidebar or Settings → Calendar.
+- Busy time from those calendars, copied into a Nextcloud calendar of your choice (optional, per calendar), so
+  colleagues see you're busy when they book a meeting: from today and 60 days ahead, with only the time and a
+  title such as "Busy", no invitees, and kept in step as the calendar changes. Removing the calendar or turning it
+  off removes the copies.
+- Subscriptions you have in Nextcloud Calendar (calendar links Nextcloud fetches) show as read-only calendars.
+- Any color for a calendar link or a server, not only the preset ones: the last swatch opens the system color
+  picker, and a hex code can be typed or pasted.
+- **Assistant**: a third view per server (the sparkles under Chat and Calendar), when the server has AI.
+  - **Chat with AI**: Nextcloud Assistant's conversations, the same as on the web. Answers appear as they're
+    written, with the place in line while the server is busy, and Stop. You can write an answer again, rename a
+    conversation, let the AI remember it, or delete it. With the Context Agent, the AI can act for you (add
+    events, send messages, …): it shows what it wants to do, who it affects and whether it can be undone, and
+    waits for Do it or Don't.
+  - **Tools**: everything else the server's AI offers (free prompt, summarize, proofread, change tone,
+    translate, generate images, analyze images, transcribe audio, generate speech, …), grouped by what they
+    work with. Each tool's form is built from what the server says it takes, with its other choices (such as
+    the model) under More options. Files come from Nextcloud Files or this computer. Results show text,
+    images and speech, with Copy and Save to Nextcloud, and "Notify me in Nextcloud when it's done".
+  - **Earlier results**: the tool runs your server keeps, to open again or remove.
+- **Settings → AI**, per server:
+  - **The model and the maximum answer length**, used for everything Hubbub asks the AI (writing help,
+    translations, thread summaries and the tools), where the server offers a choice. This is the OpenAI and
+    LocalAI integration up to version 5. Your administrator's limit on the answer length still applies.
+  - What the server's AI can do.
+- Writing help can change the tone of a draft (friendlier, more formal, less wordy, …), with the tones the
+  server offers. While it waits, it says where it is in line on the server.
+- Thread summaries show their place in line and the summary as it's being written.
+
+### Changed
+
+- Messages are translated by the server's AI when Talk says it can, as Talk recommends, instead of the older
+  translation API. The older API is still used when it's the only option.
+
+### Fixed
+
+- Nextcloud's contact birthdays calendar counted as one you can add events to.
+
 ## [0.7.0] - 2026-11-26
 
 More of the meeting inside the call (everyone's video, the people and the chat beside it, asking to moderate),

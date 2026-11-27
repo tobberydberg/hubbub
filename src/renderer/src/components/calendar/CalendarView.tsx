@@ -17,7 +17,7 @@ import {
   type CalendarViewKind
 } from '@renderer/lib/calendar-time'
 import { setApp, useApp, type AccountState } from '@renderer/store/app'
-import { eventsOf, useCalendar } from '@renderer/store/calendar'
+import { allCalendars, eventsOf, useCalendar } from '@renderer/store/calendar'
 import { usePrefs } from '@renderer/store/prefs'
 import { Linkified } from '../common/Linkified'
 import {
@@ -63,8 +63,9 @@ export function CalendarView({ account }: { account: AccountState }) {
 
   const { days } = viewRange(view, date)
   const calendars = useMemo(
-    () => Object.fromEntries((data?.calendars ?? []).map((c) => [c.href, c])),
-    [data?.calendars]
+    () => Object.fromEntries(allCalendars(data).map((c) => [c.href, c])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data?.calendars, data?.external]
   )
   const events = useMemo(() => eventsOf(data?.view ?? null, hidden ?? []), [data?.view, hidden])
   const shownDays = view === 'week' && !weekends ? days.slice(0, 5) : days

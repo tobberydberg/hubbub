@@ -12,6 +12,8 @@ import { usePrefs } from '@renderer/store/prefs'
 import { requestCall } from '@renderer/calls/call'
 import { talk } from '@renderer/api/talk'
 import { openRoom } from './actions'
+import { busySourceOf } from '@renderer/lib/busy'
+import { externalEventsIn, knownSource } from './external'
 import { reopenByLink } from './visited'
 
 // Keeps each server's calendars and events current: the calendar list (cheap) every 30 seconds, and
@@ -160,7 +162,12 @@ async function fetchEvents(
     utcStamp(end),
     unanswered
   )
-  return parseEvents(xml, context(accountId, calendar.href)).filter((e) => e.status !== 'CANCELLED')
+  return parseEvents(xml, context(accountId, calendar.href)).filter((e) => {
+    if (e.status === 'CANCELLED') return false
+    // Busy time Hubbub copied from a calendar from elsewhere: that calendar's own event shows instead
+    const busy = busySourceOf(e.uid)
+    return !busy || !knownSource(busy)
+  })
 }
 
 /** Fetches a range for the given calendars (all when omitted), keeping the others as they are. */
@@ -171,7 +178,10 @@ async function fill(
   end: number,
   only?: CalendarInfo[]
 ): Promise<void> {
-  const calendars = only ?? useCalendar.getState().accounts[accountId]?.calendars ?? []
+  const calendars = (only ?? useCalendar.getState().accounts[accountId]?.calendars ?? []).filter(
+    // Subscriptions hold no invitations
+    (c) => which !== 'invitations' || !c.subscription
+  )
   const results = await Promise.all(
     calendars.map(async (c) => {
       try {
@@ -192,6 +202,7 @@ async function fill(
       set.byCalendar[c.href] = events
       set.ctags[c.href] = c.ctag
     }
+    if (which !== 'invitations') Object.assign(set.byCalendar, externalEventsIn(accountId, start, end))
     a[which] = set
   })
 }

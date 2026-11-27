@@ -154,6 +154,53 @@ export interface ImapInvitation {
   parts: { method: string; ics: string }[]
 }
 
+/** A calendar from elsewhere that Hubbub reads itself, shown in one server's calendar */
+export type CalendarSourceKind = 'link' | 'icloud' | 'caldav'
+
+/** Copying a source's events into a Nextcloud calendar as busy time, without details */
+export interface BusyBlocking {
+  /** The Nextcloud calendar the busy time goes into */
+  calendarHref: string
+  /** The title the copies get, e.g. "Busy" */
+  title: string
+  /** Whether all-day events block whole days too */
+  allDay: boolean
+}
+
+/** A source as the window sees it: the secret link and the password stay in main */
+export interface CalendarSourceConfig {
+  id: string
+  /** The Hubbub server whose calendar shows it */
+  accountId: string
+  kind: CalendarSourceKind
+  name: string
+  /** A link's color (a CalDAV account's calendars have their own) */
+  color: string
+  /** Where it comes from, for showing: a link's host, or the CalDAV server */
+  where: string
+  username?: string
+  busy: BusyBlocking | null
+}
+
+/** Adding or changing a source; for a change, url and password left out keep the stored ones */
+export interface CalendarSourceInput {
+  id?: string
+  accountId: string
+  kind: CalendarSourceKind
+  name: string
+  color: string
+  /** A link: the calendar's address; CalDAV: the server */
+  url?: string
+  username?: string
+  password?: string
+  busy: BusyBlocking | null
+}
+
+export type CalendarSourceTest =
+  | { ok: true; kind: 'link'; text: string }
+  | { ok: true; kind: 'caldav'; calendarsXml: string }
+  | { ok: false; error: string }
+
 export interface HubbubApi {
   platform: NodeJS.Platform
   accounts: {
@@ -200,6 +247,20 @@ export interface HubbubApi {
     remove(accountId: string): Promise<void>
     test(accountId: string, settings: ImapSettings, password?: string): Promise<ImapTestResult>
     invitations(accountId: string, opts: { sinceDays: number; skip: string[] }): Promise<ImapInvitation[]>
+  }
+  /** Calendars from elsewhere (a link, iCloud, another CalDAV server) */
+  calendarSources: {
+    list(): Promise<CalendarSourceConfig[]>
+    /** Checks a source before saving it: a link's text, or a CalDAV account's calendars (raw) */
+    test(input: CalendarSourceInput): Promise<CalendarSourceTest>
+    save(input: CalendarSourceInput): Promise<CalendarSourceConfig[]>
+    remove(id: string): Promise<CalendarSourceConfig[]>
+    /** A link's calendar text; text is null when it hasn't changed since `tag` */
+    feed(id: string, tag?: string): Promise<{ tag: string; text: string | null }>
+    /** A CalDAV account's calendars, as the raw CalDAV response (hrefs as full URLs) */
+    calendars(id: string): Promise<string>
+    /** One calendar's events between two UTC times (yyyymmddThhmmssZ), not expanded; raw CalDAV */
+    events(id: string, href: string, start: string, end: string): Promise<string>
   }
   /** The user's address books, as the raw CardDAV response */
   addressBooks(accountId: string): Promise<string>
@@ -282,5 +343,8 @@ export const media = {
     `hubbub-media://${accountId}/preview/${encodeURIComponent(fileId)}?size=${size}`,
   /** A link preview's image, which Nextcloud serves for the page it previewed */
   referencePreview: (accountId: string, id: string): string =>
-    `hubbub-media://${accountId}/reference/${encodeURIComponent(id)}`
+    `hubbub-media://${accountId}/reference/${encodeURIComponent(id)}`,
+  /** A file an AI task made (an image, speech) */
+  taskFile: (accountId: string, taskId: number, fileId: number): string =>
+    `hubbub-media://${accountId}/task-file/${taskId}/${fileId}`
 }

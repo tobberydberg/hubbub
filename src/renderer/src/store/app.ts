@@ -24,8 +24,8 @@ export interface AccountState {
   roomsLoaded: boolean
   tags: ConversationTag[]
   activeToken: string | null
-  /** What the server shows: a conversation, the threads list, or the calendar */
-  view: 'room' | 'threads' | 'calendar' | 'today'
+  /** What the server shows: a conversation, the threads list, the calendar, or the AI assistant */
+  view: 'room' | 'threads' | 'calendar' | 'today' | 'assistant'
   userStatus?: string
   /** Your status with its message, as the status menu shows it */
   ownStatus?: UserStatus
@@ -85,7 +85,7 @@ export type RhsState =
 export type ModalState =
   | { type: 'add-server'; serverUrl?: string }
   | { type: 'certificate'; accountId: string; cert: CertificateInfo }
-  | { type: 'settings' }
+  | { type: 'settings'; tab?: 'ai' }
   | { type: 'server-settings'; accountId: string }
   | { type: 'switcher' }
   | { type: 'new-conversation'; kind: 'channel' | 'dm' | 'call' }
@@ -107,6 +107,8 @@ export type ModalState =
   | { type: 'call-setup'; accountId: string; token: string }
   | { type: 'status'; accountId: string }
   | { type: 'calendar-io'; accountId: string; mode: 'import' | 'export' }
+  /** Adding a calendar from elsewhere, or changing one */
+  | { type: 'calendar-source'; accountId: string; sourceId?: string }
   | { type: 'out-of-office'; accountId: string }
   | { type: 'files-picker'; accountId: string; token: string; threadId?: number }
   /** New calendar event (optionally at a time), or editing one by its id */

@@ -48,7 +48,7 @@ export function Translation({
     const abort = new AbortController()
     setResult(null)
     setError(null)
-    translateText(accountId, text, to, abort.signal)
+    translateText(accountId, text, to, { signal: abort.signal })
       .then((t) => !abort.signal.aborted && setResult(t))
       .catch((err: unknown) => !abort.signal.aborted && setError(aiErrorText(err)))
     return () => abort.abort()

@@ -242,6 +242,7 @@ const CALENDARS_PROPFIND = `<?xml version="1.0"?>
     <oc:owner-principal/>
     <nc:owner-displayname/>
     <oc:read-only/>
+    <cs:source/>
   </d:prop>
 </d:propfind>`
 
@@ -419,7 +420,14 @@ export async function davEvents(
   const range = `start="${start}" end="${end}"`
   const res = await accountSession(creds.id).fetch(url, {
     method: 'REPORT',
-    headers: { ...authHeaders(creds), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' },
+    headers: {
+      ...authHeaders(creds),
+      Depth: '1',
+      'Content-Type': 'application/xml; charset=utf-8',
+      // A subscription (a calendar link Nextcloud fetches) has its events only for clients asking
+      // for Nextcloud's copy of them; other calendars are the same either way
+      'X-NC-CalDAV-Webcal-Caching': 'On'
+    },
     body: `<?xml version="1.0"?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:prop><d:getetag/><c:calendar-data><c:expand ${range}/></c:calendar-data></d:prop>

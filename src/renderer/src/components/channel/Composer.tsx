@@ -28,7 +28,8 @@ import { toEditableText, toPlainText } from '@renderer/lib/messages'
 import { chatKey, hasFeature, setApp, showToast, useApp } from '@renderer/store/app'
 import { usePrefs } from '@renderer/store/prefs'
 import { sendMessage, uploadFiles } from '@renderer/sync/actions'
-import { aiErrorText, runTask, translateText } from '@renderer/sync/ai'
+import { aiErrorText, runTask, translateText, type TaskUpdate } from '@renderer/sync/ai'
+import { ordinal, type TaskStage } from '@renderer/lib/ai-tasks'
 import { WritingHelp, type WritingJob } from './WritingHelp'
 import { Avatar } from '../common/Avatar'
 import { EmojiPopover } from '../common/EmojiPopover'
@@ -142,7 +143,9 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const [attachMenu, setAttachMenu] = useState<Anchor | null>(null)
   const [emoji, setEmoji] = useState<Anchor | null>(null)
   /** Writing help at work, and the draft before it (for undo) */
-  const [aiBusy, setAiBusy] = useState<{ label: string; abort: AbortController } | null>(null)
+  const [aiBusy, setAiBusy] = useState<{ label: string; abort: AbortController; stage?: TaskStage } | null>(
+    null
+  )
   const [aiDone, setAiDone] = useState<{ label: string; before: string; after: string } | null>(null)
   const [threadTitle, setThreadTitle] = useState<string | null>(null)
   const [suggest, setSuggest] = useState<{
@@ -189,17 +192,22 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
   const runWritingHelp = async (job: WritingJob): Promise<void> => {
     const before = draft
     const abort = new AbortController()
-    const label = job.kind === 'rewrite' ? job.label : `Translated to ${job.to.name}`
     setAiDone(null)
-    setAiBusy({
-      label: job.kind === 'rewrite' ? busyLabel(job.label) : `Translating to ${job.to.name}`,
-      abort
-    })
+    const busy = job.kind === 'rewrite' ? job.busy : `Translating to ${job.to.name}`
+    setAiBusy({ label: busy, abort })
+    // While it waits its turn on the server, say so
+    const onUpdate = ({ stage }: TaskUpdate): void =>
+      setAiBusy((b) => (b?.abort === abort ? { ...b, stage } : b))
     try {
       const after =
         job.kind === 'rewrite'
-          ? await runTask(accountId, job.type, { input: before }, abort.signal)
-          : await translateText(accountId, before, job.to.id, abort.signal)
+          ? await runTask(
+              accountId,
+              job.type,
+              { ...job.extra, input: before },
+              { signal: abort.signal, onUpdate }
+            )
+          : await translateText(accountId, before, job.to.id, { signal: abort.signal, onUpdate })
       if (abort.signal.aborted) return
       const text = after.trim()
       // Never leave the box empty, and don't overwrite what was typed in the meantime
@@ -209,7 +217,11 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
         return
       }
       setDraft(text)
-      setAiDone({ label: job.kind === 'rewrite' ? doneLabel(job.label) : label, before, after: text })
+      setAiDone({
+        label: job.kind === 'rewrite' ? job.done : `Translated to ${job.to.name}`,
+        before,
+        after: text
+      })
     } catch (err) {
       if (!abort.signal.aborted) showToast(`Writing help didn’t work: ${aiErrorText(err)}`, 'error')
     } finally {
@@ -605,7 +617,17 @@ export function Composer({ accountId, token, placeholder, thread, disabled }: Co
         {aiBusy && (
           <div className="composer-banner">
             <Wand2 size={14} />
-            <span className="banner-text">{aiBusy.label}…</span>
+            <span className="banner-text">
+              {aiBusy.label}…
+              {aiBusy.stage?.stage === 'scheduled' && (
+                <span className="banner-sub">
+                  {' '}
+                  {aiBusy.stage.position
+                    ? `${ordinal(aiBusy.stage.position)} in line on the server`
+                    : 'waiting for the server'}
+                </span>
+              )}
+            </span>
             <button className="icon-btn small" onClick={() => aiBusy.abort.abort()} title="Cancel">
               <X size={14} />
             </button>
@@ -903,21 +925,5 @@ export function MessageEditor({
         <button onClick={() => value.trim() && onSave(value)}>save</button>
       </div>
     </div>
-  )
-}
-
-const busyLabel = (label: string): string =>
-  ({
-    Rephrase: 'Rephrasing',
-    'Make it simpler': 'Simplifying',
-    'Make it more formal': 'Making it more formal'
-  })[label] ?? 'Rewriting'
-
-/** "Rephrase" → "Rephrased" for the notice after writing help */
-function doneLabel(label: string): string {
-  return (
-    { Rephrase: 'Rephrased', 'Make it simpler': 'Made simpler', 'Make it more formal': 'Made more formal' }[
-      label
-    ] ?? 'Rewritten'
   )
 }

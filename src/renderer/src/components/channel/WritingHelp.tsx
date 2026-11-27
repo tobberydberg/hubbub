@@ -1,21 +1,31 @@
 import { useEffect, useState } from 'react'
-import { Languages, Wand2 } from 'lucide-react'
+import { Languages, MessageSquareQuote, Wand2 } from 'lucide-react'
 import { usePrefs } from '@renderer/store/prefs'
 import {
   aiTaskTypes,
   canTranslate,
   preferredTarget,
   REWRITES,
+  rewriteTones,
   translationTargets,
   type Language
 } from '@renderer/sync/ai'
 import { anchorFrom, Menu, MenuItem, MenuSeparator, MenuTitle, type Anchor } from '../common/Menu'
 
 // Writing help in the message box, by the server's AI: rephrase, simplify or make the draft more
-// formal, or translate it. Shown only when the server's AI can do at least one of these.
+// formal, change its tone, or translate it. Shown only when the server's AI can do one of these.
 
 export type WritingJob =
-  { kind: 'rewrite'; type: string; label: string } | { kind: 'translate'; to: Language }
+  | {
+      kind: 'rewrite'
+      type: string
+      /** What it says while working ("Rephrasing") and after ("Rephrased") */
+      busy: string
+      done: string
+      /** More input for the task, such as the tone */
+      extra?: Record<string, unknown>
+    }
+  | { kind: 'translate'; to: Language }
 
 export function WritingHelp({
   accountId,
@@ -28,8 +38,9 @@ export function WritingHelp({
 }) {
   const [rewrites, setRewrites] = useState<typeof REWRITES>([])
   const [languages, setLanguages] = useState<Language[]>([])
+  const [tones, setTones] = useState<{ name: string; value: string }[]>([])
   const [menu, setMenu] = useState<Anchor | null>(null)
-  const [pickLanguage, setPickLanguage] = useState(false)
+  const [pick, setPick] = useState<'language' | 'tone' | null>(null)
   const chosen = usePrefs((s) => s.translateTo)
 
   useEffect(() => {
@@ -37,6 +48,7 @@ export function WritingHelp({
     void aiTaskTypes(accountId).then(
       (types) => current && setRewrites(REWRITES.filter((r) => r.type in types))
     )
+    void rewriteTones(accountId).then((t) => current && setTones(t))
     if (canTranslate(accountId)) {
       void translationTargets(accountId)
         .then((l) => current && setLanguages(l))
@@ -47,11 +59,11 @@ export function WritingHelp({
     }
   }, [accountId])
 
-  if (!rewrites.length && !languages.length) return null
+  if (!rewrites.length && !tones.length && !languages.length) return null
   const preferred = languages.find((l) => l.id === preferredTarget(languages, chosen))
   const close = (): void => {
     setMenu(null)
-    setPickLanguage(false)
+    setPick(null)
   }
 
   return (
@@ -66,7 +78,28 @@ export function WritingHelp({
       </button>
       {menu && (
         <Menu anchor={menu} onClose={close}>
-          {pickLanguage ? (
+          {pick === 'tone' ? (
+            <>
+              <MenuTitle>Change the tone</MenuTitle>
+              {tones.map((t) => (
+                <MenuItem
+                  key={t.value}
+                  label={t.name}
+                  onClick={() => {
+                    close()
+                    const how = t.name.toLowerCase()
+                    onRun({
+                      kind: 'rewrite',
+                      type: 'core:text2text:changetone',
+                      busy: `Rewriting it ${how}`,
+                      done: `Rewritten ${how}`,
+                      extra: { tone: t.value }
+                    })
+                  }}
+                />
+              ))}
+            </>
+          ) : pick === 'language' ? (
             <>
               <MenuTitle>Translate to</MenuTitle>
               {languages.map((l) => (
@@ -92,13 +125,20 @@ export function WritingHelp({
                   label={r.label}
                   onClick={() => {
                     close()
-                    onRun({ kind: 'rewrite', type: r.type, label: r.label })
+                    onRun({ kind: 'rewrite', type: r.type, busy: r.busy, done: r.done })
                   }}
                 />
               ))}
+              {tones.length > 0 && (
+                <MenuItem
+                  icon={<MessageSquareQuote size={18} />}
+                  label="Change the tone…"
+                  onClick={() => setPick('tone')}
+                />
+              )}
               {languages.length > 0 && (
                 <>
-                  {rewrites.length > 0 && <MenuSeparator />}
+                  {(rewrites.length > 0 || tones.length > 0) && <MenuSeparator />}
                   {preferred && (
                     <MenuItem
                       icon={<Languages size={18} />}
@@ -112,7 +152,7 @@ export function WritingHelp({
                   <MenuItem
                     icon={<Languages size={18} />}
                     label="Translate to…"
-                    onClick={() => setPickLanguage(true)}
+                    onClick={() => setPick('language')}
                   />
                 </>
               )}

@@ -18,6 +18,10 @@ export interface CalendarInfo {
   sharedBy?: string
   /** Changes whenever an event in the calendar changes */
   ctag: string
+  /** A calendar link Nextcloud fetches (a subscription in Nextcloud Calendar): read-only */
+  subscription?: boolean
+  /** A calendar Hubbub reads itself (a link, iCloud), not in Nextcloud: read-only */
+  source?: { id: string; name: string }
 }
 
 export type Answer = 'ACCEPTED' | 'DECLINED' | 'TENTATIVE' | 'NEEDS-ACTION' | 'DELEGATED'
@@ -52,6 +56,8 @@ export interface CalendarEvent {
   myAnswer?: Answer
   /** Reminders, in minutes before the start */
   reminders: number[]
+  /** Shown as free (TRANSP:TRANSPARENT): doesn't block the time */
+  free?: boolean
   /** The Talk conversation the event links to, on the same server */
   talkToken?: string
   /** A meeting elsewhere: Microsoft Teams, Zoom, Google Meet or Webex */
@@ -88,7 +94,8 @@ export function parseCalendarList(xml: string, userId: string): CalendarInfo[] {
   const calendars: CalendarInfo[] = []
   for (const response of element('response', xml)) {
     const types = text('resourcetype', response)
-    if (!element('calendar', types).length) continue
+    const subscription = element('subscribed', types).length > 0
+    if (!element('calendar', types).length && !subscription) continue
     const components = element('comp', response).map((c) => /name="([^"]+)"/.exec(c)?.[1])
     if (components.length && !components.includes('VEVENT')) continue
     const href = decode(text('href', response))
@@ -106,9 +113,11 @@ export function parseCalendarList(xml: string, userId: string): CalendarInfo[] {
       name,
       color: text('calendar-color', response).slice(0, 7) || DEFAULT_COLOR,
       order: Number(text('calendar-order', response)) || 0,
-      writable: /<(?:[\w-]+:)?(write|write-content|all)\b/.test(privileges),
+      // The privilege itself: write-properties (all the birthday calendar allows) is no write access
+      writable: !subscription && /<(?:[\w-]+:)?(?:write|write-content|all)\s*\/?>/.test(privileges),
       sharedBy: shared ? ownerName || owner : undefined,
-      ctag: text('getctag', response)
+      ctag: text('getctag', response) || text('sync-token', response),
+      ...(subscription ? { subscription } : {})
     })
   }
   return calendars.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
@@ -152,7 +161,6 @@ export interface ParseContext {
 /** The events in a calendar-query REPORT response. */
 export function parseEvents(xml: string, ctx: ParseContext): CalendarEvent[] {
   const events: CalendarEvent[] = []
-  const mine = new Set(ctx.myEmails.map((e) => e.toLowerCase()))
   for (const response of element('response', xml)) {
     const href = decode(text('href', response))
     const data = decode(text('calendar-data', response).replace(/^<!\[CDATA\[|\]\]>$/g, ''))
@@ -172,65 +180,79 @@ export function parseEvents(xml: string, ctx: ParseContext): CalendarEvent[] {
       const endTime = event.endDate
       const end = endTime ? endTime.toJSDate().getTime() : start + (allDay ? 86_400_000 : 0)
       const recurrenceId = vevent.getFirstPropertyValue('recurrence-id')?.toString()
-
-      const person = (prop: ICAL.Property): EventPerson => {
-        const email = mailto(prop.getFirstValue())
-        const answer = prop.getParameter('partstat')
-        return {
-          name: String(prop.getParameter('cn') ?? email ?? ''),
-          email,
-          answer: typeof answer === 'string' ? (answer.toUpperCase() as Answer) : undefined,
-          isMe: !!email && mine.has(email)
-        }
-      }
-      const organizerProp = vevent.getFirstProperty('organizer')
-      const organizer = organizerProp ? person(organizerProp) : undefined
-      const attendees = vevent.getAllProperties('attendee').map(person)
-      // You can be among the invitees twice: at an alias, and at your main address, added when the
-      // invitation came to an alias your calendar didn't know yet. The answer you gave counts.
-      const asMe = attendees.filter((a) => a.isMe)
-      const me = asMe.find((a) => a.answer && a.answer !== 'NEEDS-ACTION') ?? asMe[0]
-
-      const reminders: number[] = []
-      for (const alarm of vevent.getAllSubcomponents('valarm')) {
-        const trigger = alarm.getFirstPropertyValue('trigger')
-        if (trigger instanceof ICAL.Duration) reminders.push(Math.round(-trigger.toSeconds() / 60))
-      }
-
-      const location = event.location || undefined
-      const description = event.description || undefined
-      const url = vevent.getFirstPropertyValue('url')?.toString()
-      events.push({
-        id: `${href}#${recurrenceId ?? ''}`,
-        href,
-        calendarHref: ctx.calendarHref,
-        uid: event.uid,
-        recurrenceId,
-        title: event.summary || 'Untitled event',
-        start,
-        end: Math.max(end, start),
-        allDay,
-        location,
-        description,
-        status: vevent.getFirstPropertyValue('status')?.toString().toUpperCase(),
-        organizer,
-        attendees,
-        myAnswer: me && !organizer?.isMe ? me.answer : undefined,
-        reminders: reminders.filter((m) => m >= 0).sort((a, b) => a - b),
-        talkToken:
-          talkTokenIn(location, ctx.serverUrl) ??
-          talkTokenIn(url, ctx.serverUrl) ??
-          talkTokenIn(description, ctx.serverUrl),
-        onlineMeeting: onlineMeetingIn(
-          vevent.getFirstPropertyValue('x-microsoft-skypeteamsmeetingurl')?.toString(),
-          location,
-          url,
-          description
-        )
-      })
+      events.push(eventFrom(vevent, { start, end, allDay, recurrenceId }, href, ctx))
     }
   }
   return events
+}
+
+/** One occurrence of an event, as Hubbub shows it */
+export function eventFrom(
+  vevent: ICAL.Component,
+  occurrence: { start: number; end: number; allDay: boolean; recurrenceId?: string },
+  href: string,
+  ctx: ParseContext
+): CalendarEvent {
+  const { start, end, allDay, recurrenceId } = occurrence
+  const event = new ICAL.Event(vevent)
+  const mine = new Set(ctx.myEmails.map((e) => e.toLowerCase()))
+  const person = (prop: ICAL.Property): EventPerson => {
+    const email = mailto(prop.getFirstValue())
+    const answer = prop.getParameter('partstat')
+    return {
+      name: String(prop.getParameter('cn') ?? email ?? ''),
+      email,
+      answer: typeof answer === 'string' ? (answer.toUpperCase() as Answer) : undefined,
+      isMe: !!email && mine.has(email)
+    }
+  }
+  const organizerProp = vevent.getFirstProperty('organizer')
+  const organizer = organizerProp ? person(organizerProp) : undefined
+  const attendees = vevent.getAllProperties('attendee').map(person)
+  // You can be among the invitees twice: at an alias, and at your main address, added when the
+  // invitation came to an alias your calendar didn't know yet. The answer you gave counts.
+  const asMe = attendees.filter((a) => a.isMe)
+  const me = asMe.find((a) => a.answer && a.answer !== 'NEEDS-ACTION') ?? asMe[0]
+
+  const reminders: number[] = []
+  for (const alarm of vevent.getAllSubcomponents('valarm')) {
+    const trigger = alarm.getFirstPropertyValue('trigger')
+    if (trigger instanceof ICAL.Duration) reminders.push(Math.round(-trigger.toSeconds() / 60))
+  }
+
+  const location = event.location || undefined
+  const description = event.description || undefined
+  const url = vevent.getFirstPropertyValue('url')?.toString()
+  const transparent = vevent.getFirstPropertyValue('transp')?.toString().toUpperCase() === 'TRANSPARENT'
+  return {
+    id: `${href}#${recurrenceId ?? ''}`,
+    href,
+    calendarHref: ctx.calendarHref,
+    uid: event.uid,
+    recurrenceId,
+    title: event.summary || 'Untitled event',
+    start,
+    end: Math.max(end, start),
+    allDay,
+    location,
+    description,
+    status: vevent.getFirstPropertyValue('status')?.toString().toUpperCase(),
+    organizer,
+    attendees,
+    myAnswer: me && !organizer?.isMe ? me.answer : undefined,
+    reminders: reminders.filter((m) => m >= 0).sort((a, b) => a - b),
+    ...(transparent ? { free: true } : {}),
+    talkToken:
+      talkTokenIn(location, ctx.serverUrl) ??
+      talkTokenIn(url, ctx.serverUrl) ??
+      talkTokenIn(description, ctx.serverUrl),
+    onlineMeeting: onlineMeetingIn(
+      vevent.getFirstPropertyValue('x-microsoft-skypeteamsmeetingurl')?.toString(),
+      location,
+      url,
+      description
+    )
+  }
 }
 
 /** A Date as the UTC stamp CalDAV time ranges use, e.g. 20261124T000000Z */

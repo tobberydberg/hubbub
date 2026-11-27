@@ -31,6 +31,15 @@ const api: HubbubApi = {
     test: (accountId, settings, password) => invoke('imap:test', accountId, settings, password),
     invitations: (accountId, opts) => invoke('imap:invitations', accountId, opts)
   },
+  calendarSources: {
+    list: () => invoke('sources:list'),
+    test: (input) => invoke('sources:test', input),
+    save: (input) => invoke('sources:save', input),
+    remove: (id) => invoke('sources:remove', id),
+    feed: (id, tag) => invoke('sources:feed', id, tag),
+    calendars: (id) => invoke('sources:calendars', id),
+    events: (id, href, start, end) => invoke('sources:events', id, href, start, end)
+  },
   addressBooks: (accountId) => invoke('dav:addressbooks', accountId),
   contacts: (accountId, href) => invoke('dav:contacts', accountId, href),
   calendarEvents: (accountId, href, start, end, unanswered) =>
